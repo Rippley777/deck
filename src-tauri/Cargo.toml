@@ -1,0 +1,15 @@
+[package]
+name = "deck"
+version = "0.1.0"
+description = "Put what matters on deck."
+authors = ["Deck"]
+edition = "2021"
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+[dependencies]
+tauri = { version = "2", features = [] }
+rusqlite = { version = "0.32", features = ["bundled", "backup"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+chrono = "0.4"
+tauri-plugin-dialog = "2"

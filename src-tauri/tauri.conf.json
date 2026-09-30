@@ -1,0 +1,36 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "Deck",
+  "version": "0.1.0",
+  "identifier": "app.deck.desktop",
+  "build": {
+    "beforeDevCommand": "node scripts/desktop-dev.mjs",
+    "devUrl": "http://localhost:1432",
+    "beforeBuildCommand": "npm run build",
+    "frontendDist": "../dist"
+  },
+  "app": {
+    "windows": [
+      {
+        "title": "Deck",
+        "width": 1440,
+        "height": 940,
+        "minWidth": 850,
+        "minHeight": 620,
+        "backgroundColor": "#19191c"
+      }
+    ],
+    "security": {
+      "csp": "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self'; connect-src ipc: http://ipc.localhost 'self'"
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": "all",
+    "icon": [
+      "icons/icon.png",
+      "icons/icon.icns",
+      "icons/icon.ico"
+    ]
+  }
+}
