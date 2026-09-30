@@ -1,4 +1,5 @@
 [package]
+license-file = "../LICENSE"
 name = "deck"
 version = "0.1.0"
 description = "Put what matters on deck."

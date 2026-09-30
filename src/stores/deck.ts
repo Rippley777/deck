@@ -77,7 +77,7 @@ export const useDeck = create<Store>((set, get) => ({
       try {
         const saved = await repository.load();
         const data = withTemplates(saved || seedData());
-        if (!saved || !saved.templates) await repository.save(data);
+        if (data !== saved) await repository.save(data);
         set({ data, ready: true });
       } catch (e) {
         set({ error: `Could not open your local database: ${String(e)}`, ready: true });

@@ -24,6 +24,25 @@ describe('template generation', () => {
     expect(withTemplates({ ...seedData(), templates: [] }).templates).toEqual([]);
     builtinTemplates().forEach(validateTemplate);
   });
+  it('adds colors to saved templates without replacing the library or its customizations', () => {
+    const legacy = JSON.parse(JSON.stringify(workspace()));
+    delete legacy.templates[0].color;
+    legacy.templates[0].icon = '🛠';
+    legacy.templates[0].favorite = true;
+    legacy.templates[1].color = '#123abc';
+    const migrated = withTemplates(legacy);
+    expect(migrated.templates).toHaveLength(legacy.templates.length);
+    expect(migrated.templates![0]).toEqual({ ...legacy.templates[0], color: '#b5a0d5' });
+    expect(migrated.templates![1].color).toBe('#123abc');
+    expect(legacy.templates[0].color).toBeUndefined();
+    expect(withTemplates(migrated)).toBe(migrated);
+    const generated = generateFromTemplate(
+      migrated,
+      migrated.templates![0],
+      options(migrated.templates![0]),
+    );
+    expect(generated.data.stacks.at(-1)).toMatchObject({ icon: '🛠', color: '#b5a0d5' });
+  });
   it('creates only reviewed cards and remaps dependencies into the generated stack and graph', () => {
     const data = workspace(),
       template = preset('Software Project');
@@ -161,6 +180,26 @@ describe('template library safety', () => {
     expect(parseTemplateImport(serializeTemplates(data.templates!))).toEqual(data.templates);
     const imported = importData(JSON.stringify(data), 'json', data);
     expect(imported.templates).toEqual(data.templates);
+  });
+  it('preserves stack appearance through templates, export, import, and generation', () => {
+    const data = workspace();
+    const stack = data.stacks.find((entry) => entry.id === 'oddware')!;
+    stack.icon = 'lucide:flower';
+    stack.color = '#123abc';
+    const template = templateFromSource(data, { sourceStackId: stack.id });
+    const [imported] = parseTemplateImport(serializeTemplates([template]));
+    const result = generateFromTemplate(data, imported, {
+      values: {},
+      selectedIds: imported.items.map((item) => item.id),
+    });
+    expect(result.data.stacks.at(-1)).toMatchObject({ icon: stack.icon, color: stack.color });
+    const overridden = generateFromTemplate(data, imported, {
+      values: {},
+      selectedIds: imported.items.map((item) => item.id),
+      icon: 'lucide:bike',
+      color: '#91b49a',
+    });
+    expect(overridden.data.stacks.at(-1)).toMatchObject({ icon: 'lucide:bike', color: '#91b49a' });
   });
   it('captures existing stack cards and checklists without preserving completion state', () => {
     const data = workspace();

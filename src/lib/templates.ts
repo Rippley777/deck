@@ -3,7 +3,14 @@ import { makeTask } from './seed';
 import { builtinTemplates, emptyTemplate, emptyTemplateItem } from './template-presets';
 
 export function withTemplates(data: DeckData): DeckData {
-  return data.templates ? data : { ...data, templates: builtinTemplates() };
+  if (!data.templates) return { ...data, templates: builtinTemplates() };
+  if (data.templates.every((template) => /^#[\da-f]{6}$/i.test(template.color))) return data;
+  return {
+    ...data,
+    templates: data.templates.map((template) =>
+      /^#[\da-f]{6}$/i.test(template.color) ? template : { ...template, color: '#b5a0d5' },
+    ),
+  };
 }
 export const interpolate = (text: string, values: Record<string, string>) =>
   text.replace(
@@ -157,7 +164,7 @@ export function generateFromTemplate(
       id: stackId,
       name: title,
       icon: options.icon || template.icon,
-      color: options.color || '#b5a0d5',
+      color: options.color || template.color,
       notes: replace(template.notes),
       deadline: null,
       headings: [
@@ -268,6 +275,7 @@ export function parseTemplateImport(content: string): DeckTemplate[] {
       name: string(raw.name),
       description: string(raw.description),
       icon: string(raw.icon) || '▱',
+      color: /^#[\da-f]{6}$/i.test(string(raw.color)) ? string(raw.color) : '#b5a0d5',
       category: string(raw.category) || 'Custom',
       scope: raw.scope as DeckTemplate['scope'],
       title: string(raw.title),
@@ -340,6 +348,7 @@ export function templateFromSource(data: DeckData, context: TemplateContext): De
   template.notes = stack?.notes || root?.notes || '';
   template.scope = stack ? 'stack' : 'task';
   template.icon = stack?.icon || '▱';
+  template.color = stack?.color || '#b5a0d5';
   template.headings = [...(stack?.headings || [])];
   template.tags = [...(root?.tags || [])];
   template.effort = root?.effort ?? 25;

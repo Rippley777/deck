@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { ArrowDown, ArrowUp, ChevronDown, GripVertical, Plus, Trash2 } from 'lucide-react';
 import { IconButton } from '../../components/ui';
 import { useDeck } from '../../stores/deck';
+import { StackIconPicker } from '../../components/StackIconPicker';
 import { emptyTemplateItem } from '../../lib/template-presets';
 import type { DeckTemplate, TemplateItem, TemplateScope, TemplateVariable } from '../../types';
 const tags = (value: string) =>
@@ -13,11 +14,15 @@ export function TemplateBuilder({
   template,
   onChange,
   onSave,
+  onSaveCopy,
+  saveLabel = 'Save template',
   onCancel,
 }: {
   template: DeckTemplate;
   onChange: (template: DeckTemplate) => void;
   onSave: () => void;
+  onSaveCopy?: () => void;
+  saveLabel?: string;
   onCancel: () => void;
 }) {
   const stacks = useDeck((s) => s.data.stacks);
@@ -47,12 +52,17 @@ export function TemplateBuilder({
         onSave();
       }}
     >
+      <p className="template-editor-note">
+        Customize the details and starter items below. Saved changes apply the next time you use
+        this template.
+      </p>
       <div className="template-builder-grid">
         <label>
           Name
           <input
             className="field"
             value={template.name}
+            autoFocus
             required
             onChange={(e) => patch({ name: e.target.value })}
           />
@@ -88,15 +98,14 @@ export function TemplateBuilder({
             placeholder="What does this help you get started?"
           />
         </label>
-        <label>
-          Icon
-          <input
-            className="field"
-            maxLength={8}
-            value={template.icon}
-            onChange={(e) => patch({ icon: e.target.value })}
+        <div className="template-wide">
+          <StackIconPicker
+            icon={template.icon}
+            color={template.color}
+            onIconChange={(icon) => patch({ icon })}
+            onColorChange={(color) => patch({ color })}
           />
-        </label>
+        </div>
         <label>
           Category
           <input
@@ -626,13 +635,26 @@ export function TemplateBuilder({
           </div>
         ))}
       </section>
-      <div className="modal-footer">
+      <div className="modal-footer template-builder-footer">
         <button className="secondary-button" type="button" onClick={onCancel}>
           Cancel
         </button>
-        <button className="primary-button" type="submit">
-          Save template
-        </button>
+        <div className="template-save-actions">
+          {onSaveCopy && (
+            <button
+              className="secondary-button"
+              type="button"
+              onClick={(event) => {
+                if (event.currentTarget.form?.reportValidity()) onSaveCopy();
+              }}
+            >
+              Save as copy
+            </button>
+          )}
+          <button className="primary-button" type="submit">
+            {saveLabel}
+          </button>
+        </div>
       </div>
     </form>
   );

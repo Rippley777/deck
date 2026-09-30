@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { lazy, Suspense, useMemo, useState } from 'react';
 import {
   Archive,
   ArrowDownWideNarrow,
@@ -28,6 +28,10 @@ import { IconButton, Modal } from '../../components/ui';
 import { DeckProgress, DeckProgressTooltip } from '../../components/progress/DeckProgress';
 import { isInTodayDeck, taskProgress, progressSummary } from '../../lib/progress';
 import type { Task } from '../../types';
+import { StackGlyph } from '../../components/StackGlyph';
+const StackIconPicker = lazy(() =>
+  import('../../components/StackIconPicker').then((m) => ({ default: m.StackIconPicker })),
+);
 const descriptions: Record<string, string> = {
   inbox: 'A home for everything on your mind. Sort it out when you’re ready.',
   upcoming: 'A little look ahead. Your next steps, at your own pace.',
@@ -163,7 +167,7 @@ export function TaskView() {
                 </>
               ) : stack ? (
                 <>
-                  <Layers3 size={14} /> YOUR STACK
+                  <StackGlyph icon={stack.icon} color={stack.color} size={14} /> YOUR STACK
                 </>
               ) : (
                 <>
@@ -529,6 +533,24 @@ export function TaskView() {
       </Modal>
       {stack && (
         <Modal open={stackEdit} onClose={() => setStackEdit(false)} title="Edit stack">
+          <Suspense fallback={<div className="stack-icon-loading">Loading icons…</div>}>
+            <StackIconPicker
+              icon={stack.icon}
+              color={stack.color}
+              onIconChange={(icon) =>
+                commit({
+                  ...data,
+                  stacks: data.stacks.map((s) => (s.id === stack.id ? { ...s, icon } : s)),
+                })
+              }
+              onColorChange={(color) =>
+                commit({
+                  ...data,
+                  stacks: data.stacks.map((s) => (s.id === stack.id ? { ...s, color } : s)),
+                })
+              }
+            />
+          </Suspense>
           <div className="form-grid">
             <label>
               Name

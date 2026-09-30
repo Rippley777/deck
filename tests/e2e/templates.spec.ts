@@ -82,6 +82,9 @@ test('library builder, duplicate, reorder, export, import, and delete survive re
   await page.getByRole('button', { name: 'Templates', exact: true }).click();
   await page.getByRole('button', { name: 'New template', exact: true }).click();
   await page.getByLabel('Name', { exact: true }).fill('Quiet routine');
+  await page.getByLabel('Search stack icons').fill('coffee');
+  await page.getByRole('button', { name: 'Stack icon Coffee', exact: true }).click();
+  await page.getByLabel('Stack color hex').fill('#83a9be');
   await page
     .getByRole('combobox', { name: 'Template type', exact: true })
     .selectOption('checklist');
@@ -113,7 +116,9 @@ test('library builder, duplicate, reorder, export, import, and delete survive re
   await expect(
     page.getByRole('button', { name: 'Unfavorite Quiet routine', exact: true }),
   ).toBeVisible();
-  await page.getByRole('button', { name: 'Edit Quiet routine', exact: true }).click();
+  await page.getByRole('button', { name: 'Customize Quiet routine', exact: true }).click();
+  await expect(page.locator('.stack-icon-current svg.lucide-coffee')).toBeVisible();
+  await expect(page.getByLabel('Stack color hex')).toHaveValue('#83a9be');
   await expect(page.getByLabel('Item 1 title', { exact: true })).toHaveValue('Plan next week');
 });
 test('save stack from context menu and mobile picker fit the viewport', async ({ page }) => {

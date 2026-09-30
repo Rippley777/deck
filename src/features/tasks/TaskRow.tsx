@@ -3,6 +3,7 @@ import type { Task } from '../../types';
 import { useDeck } from '../../stores/deck';
 import { dateLabel, today } from '../../lib/dates';
 import { useTemplateContextMenu } from '../../components/TemplateContextMenu';
+import { StackGlyph } from '../../components/StackGlyph';
 export function TaskRow({ task, showStack = true }: { task: Task; showStack?: boolean }) {
   const templateMenu = useTemplateContextMenu();
   const { data, completeTask, select, selection, updateTask } = useDeck();
@@ -104,7 +105,7 @@ export function TaskRow({ task, showStack = true }: { task: Task; showStack?: bo
         )}
         {showStack && stack && (
           <span className="task-stack" style={{ color: stack.color }}>
-            <span>{stack.icon}</span>
+            <StackGlyph icon={stack.icon} color={stack.color} size={13} />
             {stack.name}
           </span>
         )}

@@ -93,6 +93,7 @@ export interface DeckTemplate {
   name: string;
   description: string;
   icon: string;
+  color: string;
   category: string;
   scope: TemplateScope;
   title: string;

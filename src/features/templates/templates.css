@@ -104,10 +104,56 @@
 }
 .template-card-actions {
   display: flex;
+  flex-wrap: wrap;
   justify-content: flex-end;
   align-items: center;
   padding: 0 10px 8px;
   gap: 1px;
+}
+.template-customize {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-right: auto;
+  padding: 7px;
+  border-radius: 6px;
+  color: var(--purple);
+  font-size: 11px;
+}
+.template-customize:hover {
+  background: var(--hover);
+}
+.template-preview-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 20px;
+}
+.template-preview-toolbar .template-back {
+  margin-bottom: 0;
+}
+.template-editor-note {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.7;
+  margin-bottom: 22px;
+}
+.template-builder-footer {
+  position: sticky;
+  bottom: -30px;
+  background: var(--panel);
+  padding-bottom: 20px;
+  margin-bottom: -30px;
+  z-index: 2;
+  flex-wrap: wrap;
+}
+.template-save-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 10px;
 }
 .template-card-actions .icon-button {
   width: 28px;
@@ -445,6 +491,10 @@
   .templates-modal {
     padding: 20px;
     width: calc(100vw - 20px);
+  }
+  .template-builder-footer {
+    bottom: -20px;
+    margin-bottom: -20px;
   }
   .template-library,
   .template-preview-grid {

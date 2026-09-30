@@ -26,6 +26,7 @@ import { DeckMark, IconButton } from './ui';
 import type { View } from '../types';
 import { addDays, today } from '../lib/dates';
 import { useTemplateContextMenu } from './TemplateContextMenu';
+import { StackGlyph } from './StackGlyph';
 const nav: { id: View; label: string; icon: LucideIcon; color: string; shortcut?: string }[] = [
   { id: 'inbox', label: 'Inbox', icon: Inbox, color: 'blue', shortcut: '1' },
   { id: 'today', label: 'Today', icon: Sun, color: 'gold', shortcut: '2' },
@@ -186,7 +187,7 @@ export function Sidebar() {
                 onClick={() => setView(`stack:${stack.id}`)}
               >
                 <span className="stack-glyph" style={{ color: stack.color }}>
-                  {stack.icon}
+                  <StackGlyph icon={stack.icon} color={stack.color} size={18} />
                 </span>
                 <span>{stack.name}</span>
                 <DeckProgress

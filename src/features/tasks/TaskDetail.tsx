@@ -376,7 +376,7 @@ export function TaskDetail() {
                   <option value="">No stack</option>
                   {data.stacks.map((s) => (
                     <option key={s.id} value={s.id}>
-                      {s.icon} {s.name}
+                      {s.icon.startsWith('lucide:') ? s.name : `${s.icon} ${s.name}`}
                     </option>
                   ))}
                 </select>

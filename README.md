@@ -30,7 +30,7 @@ The desktop app needs no web server or network after installation. The browser v
 - Shift/Cmd/Ctrl-click cards for bulk scheduling, completion, and stack changes.
 - Completion includes Undo. Recurring completion creates one next occurrence, with a fresh checklist; Undo also removes that occurrence.
 - Deal Your Day intentionally pulls cards into Today. Shuffle ranks actionable cards by priority, overdue deadlines, effort, age, and current stack; blocked cards are excluded.
-- Stack settings include notes, a deadline, headings, and related stacks. Goals and their stacks can be managed under Settings → Advanced.
+- Stack settings include notes, a deadline, headings, and related stacks. New and existing stacks and templates can use 429 searchable Lucide icons with color swatches or a custom hex color; older symbol icons keep rendering. Goals and their stacks can be managed under Settings → Advanced.
 
 Quick Add recognizes dates and times, `#StackName`, and `@tags` (an unknown `#name` also becomes a tag):
 
@@ -44,18 +44,18 @@ Dates accept natural language such as “next Monday”, “in 3 days”, or “
 
 ### Keyboard
 
-| Action | Shortcut |
-| --- | --- |
-| Quick Add | Cmd/Ctrl N, or N outside an editor |
-| New from template | Cmd/Ctrl Shift N |
-| Search and commands | Cmd/Ctrl K, or / |
-| Complete open card | Cmd/Ctrl Enter |
-| Navigate the seven main destinations | Alt 1–7 |
-| Navigate/open/complete list cards | Arrow keys / Enter / Space |
-| Schedule open card today | T outside an editor |
-| Focus the stack selector | M outside an editor |
-| Settings | Cmd/Ctrl , |
-| All shortcuts | ? |
+| Action                               | Shortcut                           |
+| ------------------------------------ | ---------------------------------- |
+| Quick Add                            | Cmd/Ctrl N, or N outside an editor |
+| New from template                    | Cmd/Ctrl Shift N                   |
+| Search and commands                  | Cmd/Ctrl K, or /                   |
+| Complete open card                   | Cmd/Ctrl Enter                     |
+| Navigate the seven main destinations | Alt 1–7                            |
+| Navigate/open/complete list cards    | Arrow keys / Enter / Space         |
+| Schedule open card today             | T outside an editor                |
+| Focus the stack selector             | M outside an editor                |
+| Settings                             | Cmd/Ctrl ,                         |
+| All shortcuts                        | ?                                  |
 
 Search includes titles, notes, stack names, tags, and completed cards. Filters can be combined:
 
@@ -70,6 +70,8 @@ before:Friday overdue:true
 Open **Templates** in the sidebar to manage the library, or **New from template** with Cmd/Ctrl Shift N or the command palette. New Card and New Stack both offer **Start from template**. Right-click a card or sidebar stack (or press Shift F10 while focused) for template actions. Card details can insert a checklist; cards and stacks can also be saved as templates.
 
 Ten built-ins cover Software Project, New Feature, Bug Fix, App Launch, App Deployment, Website Launch, Open Source Release, Home Project, Trip Planning, and Deploy Checklist. The picker supports fuzzy search, favors recent use, then favorites, then your library order.
+
+Choose **Customize** on any template card, or **Customize template** from its preview, to edit built-in or custom templates. Change the name, description, icon, color, defaults, notes, headings, variables, and starter items. **Save changes** updates the saved template; **Save as copy** creates a separate version. Editing from a preview returns you there with your entered values and selections preserved, and Cancel discards your edits. Changes apply to future uses; cards already created keep their content.
 
 Every application opens a preview. Select All, Clear All, and individual checkboxes control what is generated. Variables such as `{{project_name}}` are substituted in titles, notes, tags, and headings. Required variables and variables referenced by checked items must have values. Choice variables can control simple “include when this value equals that value” conditions; hidden items are never generated.
 
@@ -167,3 +169,9 @@ npm run build
 ```
 
 The initial workspace contains realistic demo cards. An empty workspace is seeded only when no saved workspace exists. Distribution signing, notarization, and automatic native updates are not configured; configure these before publicly shipping installers.
+
+## License
+
+[MIT NON-AI License](LICENSE). This custom, source-available license permits use, modification, and redistribution subject to its terms, but **prohibits all AI/ML use of the code**, including training, inference, AI integrations, and supplying the code to AI coding tools, unless separately authorized in writing by the applicable copyright holder(s). It is not the standard MIT License or an OSI-approved open-source license.
+
+Third-party components and assets retain their own licenses. Previously granted licenses are not retroactively revoked. See the license file for the full terms.

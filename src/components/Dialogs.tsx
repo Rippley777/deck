@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { lazy, Suspense, useEffect, useMemo, useState } from 'react';
 import {
   ArrowRight,
   CalendarDays,
@@ -19,6 +19,9 @@ import {
 } from 'lucide-react';
 import { useDeck } from '../stores/deck';
 import { Modal } from './ui';
+const StackIconPicker = lazy(() =>
+  import('./StackIconPicker').then((m) => ({ default: m.StackIconPicker })),
+);
 import { addDays, dateLabel, parseQuickAdd, today } from '../lib/dates';
 import { searchTasks, shuffleRank } from '../lib/search';
 export function Dialogs() {
@@ -41,7 +44,7 @@ export function Dialogs() {
   const [text, setText] = useState('');
   const [commandIndex, setCommandIndex] = useState(0);
   const [stackName, setStackName] = useState('');
-  const [stackIcon, setStackIcon] = useState('◈');
+  const [stackIcon, setStackIcon] = useState('lucide:layers-3');
   const [stackColor, setStackColor] = useState('#b5a0d5');
   const [shuffleIndex, setShuffleIndex] = useState(0);
   const parsed = useMemo(() => parseQuickAdd(text, data.stacks), [text, data.stacks]);
@@ -288,17 +291,14 @@ export function Dialogs() {
             type="button"
             className="template-entry"
             onClick={() =>
-              useDeck
-                .getState()
-                .openTemplates({
-                  scope: 'task',
-                  title: parsed.title,
-                  stackId:
-                    parsed.stackId || (view.startsWith('stack:') ? view.slice(6) : undefined),
-                  scheduled: parsed.scheduled || (view === 'today' ? today() : null),
-                  tags: parsed.tags,
-                  heading: sessionStorage.getItem('deck-add-heading') || undefined,
-                })
+              useDeck.getState().openTemplates({
+                scope: 'task',
+                title: parsed.title,
+                stackId: parsed.stackId || (view.startsWith('stack:') ? view.slice(6) : undefined),
+                scheduled: parsed.scheduled || (view === 'today' ? today() : null),
+                tags: parsed.tags,
+                heading: sessionStorage.getItem('deck-add-heading') || undefined,
+              })
             }
           >
             <Sparkles size={15} /> Start from template <span>A familiar setup, ready to go.</span>
@@ -436,43 +436,24 @@ export function Dialogs() {
             type="button"
             className="template-entry"
             onClick={() =>
-              useDeck
-                .getState()
-                .openTemplates({
-                  scope: 'stack',
-                  title: stackName,
-                  icon: stackIcon,
-                  color: stackColor,
-                })
+              useDeck.getState().openTemplates({
+                scope: 'stack',
+                title: stackName,
+                icon: stackIcon,
+                color: stackColor,
+              })
             }
           >
             <Sparkles size={15} /> Start from template <span>Choose your starter cards.</span>
           </button>
-          <div className="icon-options">
-            {['◈', '▣', '☀', '⌂', '▱', '✳', '◉', '☾', '🌱', '🛠'].map((icon) => (
-              <button
-                type="button"
-                key={icon}
-                className={stackIcon === icon ? 'selected' : ''}
-                onClick={() => setStackIcon(icon)}
-              >
-                {icon}
-              </button>
-            ))}
-          </div>
-          <div className="color-options">
-            {['#b5a0d5', '#83a9be', '#c9ae78', '#91b49a', '#cb9191', '#a9a9b1'].map((color) => (
-              <button
-                aria-label={`Stack color ${color}`}
-                type="button"
-                key={color}
-                style={{ background: color }}
-                onClick={() => setStackColor(color)}
-              >
-                {stackColor === color && <Check size={13} />}
-              </button>
-            ))}
-          </div>
+          <Suspense fallback={<div className="stack-icon-loading">Loading icons…</div>}>
+            <StackIconPicker
+              icon={stackIcon}
+              color={stackColor}
+              onIconChange={setStackIcon}
+              onColorChange={setStackColor}
+            />
+          </Suspense>
           <div className="modal-footer">
             <button className="primary-button" type="submit" disabled={!stackName.trim()}>
               Create stack <Plus size={14} />

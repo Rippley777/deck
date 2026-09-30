@@ -30,6 +30,7 @@ import {
 } from '../../lib/templates';
 import type { DeckTemplate, TemplateScope } from '../../types';
 import { TemplateBuilder } from './TemplateBuilder';
+import { StackGlyph } from '../../components/StackGlyph';
 import './templates.css';
 
 export function TemplateDialog() {
@@ -37,6 +38,7 @@ export function TemplateDialog() {
   const templates = data.templates || [];
   const fromSource = !!(context.sourceTaskId || context.sourceStackId);
   const [stage, setStage] = useState<'browse' | 'preview' | 'edit'>(fromSource ? 'edit' : 'browse');
+  const [editReturn, setEditReturn] = useState<'browse' | 'preview'>('browse');
   const [draft, setDraft] = useState<DeckTemplate>(() =>
     fromSource ? templateFromSource(data, context) : emptyTemplate(),
   );
@@ -47,7 +49,9 @@ export function TemplateDialog() {
   const [selected, setSelected] = useState<string[]>([]);
   const [title, setTitle] = useState(context.title || '');
   const [stackId, setStackId] = useState(context.stackId || '');
+  const [appearance, setAppearance] = useState<{ icon?: string; color?: string }>({});
   const [error, setError] = useState('');
+  const editingTemplate = templates.find((template) => template.id === draft.id);
   const file = useRef<HTMLInputElement>(null);
   useEffect(() => {
     document.querySelector('.templates-modal')?.scrollTo({ top: 0 });
@@ -56,7 +60,11 @@ export function TemplateDialog() {
     setModal(null);
     if (context.taskId || context.sourceTaskId) select(context.taskId || context.sourceTaskId!);
   };
-  function preview(template: DeckTemplate) {
+  function preview(
+    template: DeckTemplate,
+    overrides = { icon: context.icon, color: context.color },
+  ) {
+    setAppearance(overrides);
     setChosen(template);
     setSelected(template.items.filter((item) => item.selected).map((item) => item.id));
     setValues(
@@ -75,17 +83,92 @@ export function TemplateDialog() {
     setError('');
     setStage('preview');
   }
-  function save(template: DeckTemplate) {
+  function edit(template: DeckTemplate, copy = false) {
+    setDraft({
+      ...structuredClone(template),
+      ...(copy
+        ? { id: crypto.randomUUID(), name: `${template.name} (copy)`, lastUsedAt: null }
+        : {}),
+    });
+    setEditReturn(stage === 'preview' ? 'preview' : 'browse');
+    setStage('edit');
+    setError('');
+  }
+  function save(template: DeckTemplate, copy = false) {
     try {
       validateTemplate(template);
+      const saved = copy
+        ? {
+            ...template,
+            id: crypto.randomUUID(),
+            name:
+              template.name.trim() === editingTemplate?.name.trim()
+                ? `${template.name.trim()} (copy)`
+                : template.name.trim(),
+            lastUsedAt: null,
+          }
+        : template;
+      const current = useDeck.getState().data;
+      const library = current.templates || [];
       commit({
-        ...data,
-        templates: templates.some((t) => t.id === template.id)
-          ? templates.map((t) => (t.id === template.id ? template : t))
-          : [...templates, template],
+        ...current,
+        templates: library.some((t) => t.id === saved.id)
+          ? library.map((t) => (t.id === saved.id ? saved : t))
+          : [...library, saved],
       });
-      notify('Template saved. Ready for next time.');
-      setStage('browse');
+      notify(copy ? 'Template copy saved.' : 'Template saved. Ready for next time.');
+      const previous = editReturn === 'preview' ? chosen : editingTemplate;
+      const overrides = editReturn === 'preview' ? appearance : context;
+      const nextAppearance = {
+        icon: saved.icon !== previous?.icon ? saved.icon : overrides.icon,
+        color: saved.color !== previous?.color ? saved.color : overrides.color,
+      };
+      if (editReturn === 'preview' && chosen && (!context.taskId || saved.scope === 'checklist')) {
+        setSelected(
+          saved.items
+            .filter((item) => {
+              const previous = chosen.items.find((entry) => entry.id === item.id);
+              return !previous || previous.selected !== item.selected
+                ? item.selected
+                : selected.includes(item.id);
+            })
+            .map((item) => item.id),
+        );
+        setValues(
+          Object.fromEntries(
+            saved.variables.map((variable) => {
+              const previous = chosen.variables.find((entry) => entry.key === variable.key);
+              const value = values[variable.key];
+              return [
+                variable.key,
+                value !== undefined &&
+                value !== previous?.defaultValue &&
+                (variable.type !== 'select' || variable.options.includes(value))
+                  ? value
+                  : variable.defaultValue,
+              ];
+            }),
+          ),
+        );
+        const previousStack = data.stacks.some((stack) => stack.id === chosen.defaultStackId)
+          ? chosen.defaultStackId!
+          : '';
+        if (context.stackId === undefined && stackId === previousStack)
+          setStackId(
+            data.stacks.some((stack) => stack.id === saved.defaultStackId)
+              ? saved.defaultStackId!
+              : '',
+          );
+        setAppearance(nextAppearance);
+        setChosen(saved);
+        setStage('preview');
+      } else if (!context.library && (!context.taskId || saved.scope === 'checklist')) {
+        preview(saved, nextAppearance);
+      } else {
+        setStage('browse');
+        setQuery('');
+        if (!context.scope) setScope('');
+      }
       setError('');
     } catch (e) {
       setError((e as Error).message);
@@ -153,7 +236,9 @@ export function TemplateDialog() {
       onClose={close}
       title={
         stage === 'edit'
-          ? 'Make it repeatable.'
+          ? editingTemplate
+            ? 'Customize template'
+            : 'Create a template'
           : stage === 'preview'
             ? 'Make this one yours.'
             : context.library
@@ -162,7 +247,9 @@ export function TemplateDialog() {
       }
       description={
         stage === 'edit'
-          ? 'Build a starting point you can use again.'
+          ? editingTemplate
+            ? 'Update the setup for next time, or save your changes as a separate template.'
+            : 'Build a starting point you can use again.'
           : stage === 'preview'
             ? 'Choose what you need. Leave the rest for another time.'
             : 'You’ve done this before. Keep the setup.'
@@ -179,8 +266,10 @@ export function TemplateDialog() {
           template={draft}
           onChange={setDraft}
           onSave={() => save(draft)}
+          onSaveCopy={editingTemplate ? () => save(draft, true) : undefined}
+          saveLabel={editingTemplate ? 'Save changes' : 'Save template'}
           onCancel={() => {
-            setStage('browse');
+            setStage(editReturn);
             setError('');
           }}
         />
@@ -192,6 +281,7 @@ export function TemplateDialog() {
               const current = useDeck.getState().data;
               const result = generateFromTemplate(current, chosen, {
                 ...context,
+                ...appearance,
                 title,
                 stackId: stackId || null,
                 values,
@@ -215,18 +305,27 @@ export function TemplateDialog() {
             }
           }}
         >
-          <button
-            type="button"
-            className="template-back"
-            onClick={() => {
-              setStage('browse');
-              setError('');
-            }}
-          >
-            <ArrowLeft size={14} /> All templates
-          </button>
+          <div className="template-preview-toolbar">
+            <button
+              type="button"
+              className="template-back"
+              onClick={() => {
+                setStage('browse');
+                setError('');
+              }}
+            >
+              <ArrowLeft size={14} /> All templates
+            </button>
+            <button type="button" className="secondary-button" onClick={() => edit(chosen)}>
+              <Pencil size={14} /> Customize template
+            </button>
+          </div>
           <div className="template-preview-title">
-            <span>{chosen.icon}</span>
+            <StackGlyph
+              icon={chosen.scope === 'stack' ? appearance.icon || chosen.icon : chosen.icon}
+              color={chosen.scope === 'stack' ? appearance.color || chosen.color : chosen.color}
+              size={27}
+            />
             <div>
               <h3>{chosen.name}</h3>
               <p>{chosen.description}</p>
@@ -443,6 +542,7 @@ export function TemplateDialog() {
               className="secondary-button"
               onClick={() => {
                 setDraft({ ...emptyTemplate(), scope: context.scope || 'stack' });
+                setEditReturn('browse');
                 setStage('edit');
                 setError('');
               }}
@@ -481,7 +581,9 @@ export function TemplateDialog() {
                 }}
               >
                 <button className="template-card-main" onClick={() => preview(template)}>
-                  <span className="template-card-icon">{template.icon}</span>
+                  <span className="template-card-icon">
+                    <StackGlyph icon={template.icon} color={template.color} size={21} />
+                  </span>
                   <span>
                     <strong>{template.name}</strong>
                     <small>{template.description}</small>
@@ -492,6 +594,14 @@ export function TemplateDialog() {
                   </span>
                 </button>
                 <div className="template-card-actions">
+                  <button
+                    type="button"
+                    className="template-customize"
+                    aria-label={`Customize ${template.name}`}
+                    onClick={() => edit(template)}
+                  >
+                    <Pencil size={13} /> Customize
+                  </button>
                   <IconButton
                     icon={Star}
                     label={`${template.favorite ? 'Unfavorite' : 'Favorite'} ${template.name}`}
@@ -508,27 +618,9 @@ export function TemplateDialog() {
                   {context.library && (
                     <>
                       <IconButton
-                        icon={Pencil}
-                        label={`Edit ${template.name}`}
-                        onClick={() => {
-                          setDraft(structuredClone(template));
-                          setStage('edit');
-                          setError('');
-                        }}
-                      />
-                      <IconButton
                         icon={Copy}
                         label={`Duplicate ${template.name} template`}
-                        onClick={() => {
-                          setDraft({
-                            ...structuredClone(template),
-                            id: crypto.randomUUID(),
-                            name: `${template.name} (copy)`,
-                            lastUsedAt: null,
-                          });
-                          setStage('edit');
-                          setError('');
-                        }}
+                        onClick={() => edit(template, true)}
                       />
                       <IconButton
                         icon={Download}
