@@ -1366,6 +1366,20 @@ input[type='checkbox'] {
   gap: 4px;
   color: var(--purple);
 }
+.bulk-toolbar .bulk-delete-action,
+.template-context-menu button.destructive {
+  color: #d98982;
+}
+.template-context-menu button.destructive {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.bulk-toolbar .bulk-delete-action:hover,
+.template-context-menu button.destructive:hover,
+.template-context-menu button.destructive:focus {
+  color: #f0a098;
+}
 .bulk-toolbar select {
   max-width: 120px;
   font-size: 9px;

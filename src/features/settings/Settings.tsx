@@ -1,3 +1,7 @@
+import { isTauri } from '@tauri-apps/api/core';
+import { DesktopAccount } from '../account/DesktopAccount';
+import { Account } from '../account/Account';
+import { portalEnabled } from '../../lib/cloud';
 import { useEffect, useRef, useState } from 'react';
 import {
   Archive,
@@ -20,6 +24,7 @@ import { repository, type Backup } from '../../lib/repository';
 import { exportData, importData } from '../../lib/transfer';
 import type { DeckData, Settings as SettingsType } from '../../types';
 const tabs = [
+  ...(portalEnabled || isTauri() ? [{ name: 'Account', icon: ShieldCheck }] : []),
   { name: 'General', icon: Settings2 },
   { name: 'Appearance', icon: Palette },
   { name: 'Keyboard', icon: Keyboard },
@@ -74,6 +79,7 @@ export function Settings() {
         </nav>
         <div className="settings-content">
           <h3>{tab}</h3>
+          {tab === 'Account' && (isTauri() ? <DesktopAccount /> : <Account />)}
           {tab === 'General' && (
             <>
               <p className="small-muted">A few preferences for your everyday.</p>

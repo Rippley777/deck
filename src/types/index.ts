@@ -57,6 +57,13 @@ export interface Settings {
   layout: 'force' | 'hierarchy' | 'radial' | 'timeline';
 }
 export interface DeckData {
+  cloudPristine?: boolean;
+  cloud?: {
+    userId: string;
+    version: number;
+    base: Omit<DeckData, 'cloud'>;
+    recovery?: Omit<DeckData, 'cloud'>[];
+  };
   version: 1;
   tasks: Task[];
   stacks: Stack[];

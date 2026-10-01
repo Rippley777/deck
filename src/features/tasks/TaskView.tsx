@@ -56,6 +56,7 @@ export function TaskView() {
     setModal,
     selection,
     bulk,
+    deleteTasks,
     commit,
     updateTask,
     localGraph,
@@ -334,6 +335,13 @@ export function TaskView() {
                 </select>
                 <button onClick={() => bulk({ completedAt: new Date().toISOString() })}>
                   <Check size={14} /> Complete
+                </button>
+                <button
+                  className="bulk-delete-action"
+                  aria-label={`Delete ${selection.length} selected ${selection.length === 1 ? 'card' : 'cards'}`}
+                  onClick={() => deleteTasks(selection)}
+                >
+                  <X size={14} /> Delete
                 </button>
                 <IconButton
                   icon={X}
@@ -629,14 +637,7 @@ export function TaskView() {
             <button
               className="danger-button"
               onClick={() => {
-                commit({
-                  ...data,
-                  stacks: data.stacks.filter((s) => s.id !== stack.id),
-                  tasks: data.tasks.map((t) =>
-                    t.stackId === stack.id ? { ...t, stackId: null, destination: 'inbox' } : t,
-                  ),
-                });
-                useDeck.getState().setView('inbox');
+                useDeck.getState().deleteStack(stack.id);
                 setStackEdit(false);
               }}
             >

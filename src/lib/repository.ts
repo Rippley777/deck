@@ -2,6 +2,8 @@ import initSqlJs, { type Database } from 'sql.js';
 import wasmUrl from 'sql.js/dist/sql-wasm.wasm?url';
 import { invoke, isTauri } from '@tauri-apps/api/core';
 import type { DeckData } from '../types';
+import { mergeDeck, emptyDeck, sameValue } from '../../shared/sync';
+import { defaultSettings } from '../types';
 import { today } from './dates';
 export interface Backup {
   name: string;
@@ -16,6 +18,10 @@ export interface DeckRepository {
   location(): Promise<string>;
 }
 let idb: IDBDatabase;
+let accountScope = '';
+export function setRepositoryAccount(userId: string) {
+  accountScope = userId;
+}
 function request<T>(req: IDBRequest<T>): Promise<T> {
   return new Promise((resolve, reject) => {
     req.onsuccess = () => resolve(req.result);
@@ -23,7 +29,7 @@ function request<T>(req: IDBRequest<T>): Promise<T> {
   });
 }
 async function openIDB() {
-  const req = indexedDB.open('deck-local', 1);
+  const req = indexedDB.open(accountScope ? `deck-account-${accountScope}` : 'deck-local', 1);
   req.onupgradeneeded = () => {
     req.result.createObjectStore('files');
   };
@@ -45,6 +51,8 @@ async function readFile(key: string) {
 }
 class BrowserRepository implements DeckRepository {
   private db!: Database;
+  private journalKey = `pending-${crypto.randomUUID()}`;
+  private recoveredKeys: string[] = [];
   async load() {
     await openIDB();
     const SQL = await initSqlJs({ locateFile: () => wasmUrl });
@@ -53,7 +61,40 @@ class BrowserRepository implements DeckRepository {
     this.db.run(
       'CREATE TABLE IF NOT EXISTS migrations (version INTEGER PRIMARY KEY); CREATE TABLE IF NOT EXISTS documents (collection TEXT NOT NULL, id TEXT NOT NULL, value TEXT NOT NULL, PRIMARY KEY(collection,id)); INSERT OR IGNORE INTO migrations VALUES (1);',
     );
-    return this.decode();
+    let data = this.decode();
+    if (accountScope) {
+      const store = idb.transaction('files', 'readonly').objectStore('files');
+      const keys = await request(store.getAllKeys());
+      this.recoveredKeys = keys.map(String).filter((key) => key.startsWith('pending-'));
+      for (const key of this.recoveredKeys) {
+        const pending = (await readFile(key)) as DeckData;
+        if (!pending || (pending.cloud && pending.cloud.userId !== accountScope)) continue;
+        const clean = (v: DeckData) => {
+          const { cloud: _cloud, cloudPristine: _pristine, ...content } = v;
+          return content;
+        };
+        const current = data || emptyDeck(defaultSettings);
+        const merged = mergeDeck(
+          pending.cloud?.base || emptyDeck(defaultSettings),
+          clean(pending),
+          clean(current),
+        );
+        data = {
+          ...merged.data,
+          cloudPristine: current.cloudPristine && pending.cloudPristine,
+          cloud: current.cloud
+            ? {
+                ...current.cloud,
+                recovery: [
+                  ...(current.cloud.recovery || []),
+                  ...(merged.conflicts.length ? [clean(pending)] : []),
+                ],
+              }
+            : undefined,
+        };
+      }
+    }
+    return data;
   }
   private decode(): DeckData | null {
     const rows = this.db.exec(
@@ -74,7 +115,16 @@ class BrowserRepository implements DeckRepository {
       this.db.run('ROLLBACK');
       throw e;
     }
-    await putMany([['deck.db', this.db.export()]]);
+    const { cloud, cloudPristine: _pristine, ...content } = data;
+    const synced = cloud && sameValue(content, cloud.base);
+    await putMany(
+      [
+        ['deck.db', this.db.export()],
+        ...(accountScope && !synced ? [[this.journalKey, data] as [string, unknown]] : []),
+      ],
+      accountScope && synced ? [this.journalKey, ...this.recoveredKeys] : [],
+    );
+    if (synced) this.recoveredKeys = [];
     const existing = await this.backups();
     const newest = existing[0];
     const interval = data.settings.backupFrequency === 'weekly' ? 7 : 1;
@@ -125,7 +175,7 @@ class BrowserRepository implements DeckRepository {
     return data;
   }
   async location() {
-    return 'This browser · IndexedDB / deck-local / deck.db';
+    return `This browser · IndexedDB / ${accountScope ? `deck-account-${accountScope}` : 'deck-local'} / deck.db`;
   }
 }
 class NativeRepository implements DeckRepository {

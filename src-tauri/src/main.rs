@@ -1,4 +1,5 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
+mod cloud;
 mod commands;
 mod database;
 use tauri::Manager;
@@ -18,7 +19,10 @@ fn main() {
             commands::create_backup,
             commands::list_backups,
             commands::restore_backup,
-            commands::save_export
+            commands::save_export,
+            cloud::connect_cloud,
+            cloud::cloud_request,
+            cloud::disconnect_cloud
         ])
         .run(tauri::generate_context!())
         .expect("Unable to run Deck");

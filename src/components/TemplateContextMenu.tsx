@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type MouseEvent, type KeyboardEvent } from 'react';
 import { createPortal } from 'react-dom';
+import { Trash2 } from 'lucide-react';
 import { useDeck } from '../stores/deck';
 
 export function useTemplateContextMenu() {
@@ -62,7 +63,7 @@ export function useTemplateContextMenu() {
           }}
           style={{
             left: Math.max(12, Math.min(menu.x, window.innerWidth - 230)),
-            top: Math.max(12, Math.min(menu.y, window.innerHeight - 110)),
+            top: Math.max(12, Math.min(menu.y, window.innerHeight - 190)),
           }}
           onKeyDown={(e) => {
             e.stopPropagation();
@@ -112,6 +113,17 @@ export function useTemplateContextMenu() {
             }}
           >
             Save {menu.taskId ? 'card' : 'stack'} as template
+          </button>
+          <button
+            role="menuitem"
+            className="destructive"
+            onClick={() => {
+              if (menu.taskId) useDeck.getState().deleteTask(menu.taskId);
+              if (menu.stackId) useDeck.getState().deleteStack(menu.stackId);
+              setMenu(null);
+            }}
+          >
+            <Trash2 size={14} /> Delete {menu.taskId ? 'card' : 'stack'}
           </button>
         </div>,
         document.body,

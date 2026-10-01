@@ -1,6 +1,10 @@
 node_modules/
 dist/
+deck-azure-free.zip
 src-tauri/target/
 playwright-report/
 test-results/
 .DS_Store
+
+.env*
+!.env.example

@@ -1,3 +1,6 @@
+import { portalEnabled, useCloud } from './lib/cloud';
+import { CalendarDays, Inbox, Layers3, Sun } from 'lucide-react';
+import { trackView } from './lib/analytics';
 import { lazy, Suspense, useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import {
@@ -28,6 +31,9 @@ const TemplateDialog = lazy(() =>
 import { today } from './lib/dates';
 import type { View } from './types';
 export default function App() {
+  const cloudUser = useCloud((s) => s.user);
+  const cloudStatus = useCloud((s) => s.status);
+  const [mobileMenu, setMobileMenu] = useState(false);
   const {
     data,
     ready,
@@ -44,6 +50,10 @@ export default function App() {
     saving,
     toast,
   } = useDeck();
+  useEffect(() => {
+    trackView(view);
+  }, [view]);
+  useEffect(() => setMobileMenu(false), [view]);
   const [searchOpen, setSearchOpen] = useState(false);
   useEffect(() => {
     void initialize();
@@ -146,8 +156,14 @@ export default function App() {
     );
   const stack = view.startsWith('stack:') ? data.stacks.find((s) => s.id === view.slice(6)) : null;
   return (
-    <div className={`app-shell ${!sidebar ? 'sidebar-hidden' : ''}`}>
-      {sidebar && <Sidebar />}
+    <div
+      onClick={(e) => {
+        if (mobileMenu && (e.target as HTMLElement).closest('.sidebar button'))
+          setMobileMenu(false);
+      }}
+      className={`app-shell ${!sidebar ? 'sidebar-hidden' : ''} ${mobileMenu ? 'mobile-menu-open' : ''}`}
+    >
+      {(sidebar || mobileMenu) && <Sidebar />}
       <div className="main-shell">
         <header className="topbar">
           <div className="breadcrumbs">
@@ -165,7 +181,13 @@ export default function App() {
           <div className="topbar-actions">
             <span className="local-label">
               <span className={`status-dot ${error ? 'status-error' : ''}`} />
-              {error ? 'Save needs attention' : saving ? 'Saving…' : 'All changes saved'}
+              {error
+                ? 'Save needs attention'
+                : saving
+                  ? 'Saving…'
+                  : portalEnabled || cloudUser
+                    ? cloudStatus
+                    : 'All changes saved'}
             </span>
             <span className="topbar-divider" />
             <IconButton
@@ -239,6 +261,35 @@ export default function App() {
           <TaskDetail />
         </Suspense>
       )}
+      <nav className="mobile-nav" aria-label="Main navigation">
+        <button className={view === 'today' ? 'active' : ''} onClick={() => setView('today')}>
+          <Sun size={19} />
+          Today
+        </button>
+        <button className={view === 'inbox' ? 'active' : ''} onClick={() => setView('inbox')}>
+          <Inbox size={19} />
+          Inbox
+        </button>
+        <button className={view === 'upcoming' ? 'active' : ''} onClick={() => setView('upcoming')}>
+          <CalendarDays size={19} />
+          On Deck
+        </button>
+        <button
+          className="mobile-add"
+          aria-label="Quick add card"
+          onClick={() => setModal('quick')}
+        >
+          <Plus size={23} />
+        </button>
+        <button aria-expanded={mobileMenu} onClick={() => setMobileMenu(!mobileMenu)}>
+          <Layers3 size={19} />
+          Stacks
+        </button>
+        <button onClick={() => setModal('commands')}>
+          <Search size={19} />
+          Search
+        </button>
+      </nav>
       <Dialogs />
       <Settings />
       {modal === 'templates' && (

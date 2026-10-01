@@ -37,8 +37,10 @@ interface Store {
   addTask: (title: string, patch?: Partial<Task>) => string;
   completeTask: (id: string) => void;
   deleteTask: (id: string) => void;
+  deleteTasks: (ids: string[]) => void;
   duplicateTask: (id: string) => void;
   addStack: (stack: Omit<Stack, 'id'>) => void;
+  deleteStack: (id: string) => void;
   duplicateStack: (id: string) => void;
   setView: (view: View) => void;
   setModal: (modal: Modal) => void;
@@ -76,7 +78,7 @@ export const useDeck = create<Store>((set, get) => ({
     initializing = (async () => {
       try {
         const saved = await repository.load();
-        const data = withTemplates(saved || seedData());
+        const data = withTemplates(saved || (import.meta.env.VITE_DECK_PORTAL === 'true' ? { cloudPristine: true, version: 1 as const, tasks: [], stacks: [], goals: [], headings: [], settings: defaultSettings } : seedData()));
         if (data !== saved) await repository.save(data);
         set({ data, ready: true });
       } catch (e) {
@@ -86,7 +88,7 @@ export const useDeck = create<Store>((set, get) => ({
     return initializing;
   },
   commit: (data) => {
-    data = withTemplates(data);
+    data = withTemplates(data.cloudPristine ? { ...data, cloudPristine: false } : data);
     set({ data, saving: true });
     pendingSaves++;
     queue = queue
@@ -184,42 +186,53 @@ export const useDeck = create<Store>((set, get) => ({
       });
     });
   },
-  deleteTask: (id) => {
+  deleteTask: (id) => get().deleteTasks([id]),
+  deleteTasks: (ids) => {
     const data = get().data;
-    const task = data.tasks.find((t) => t.id === id);
+    const deletedIds = new Set(ids);
+    const deletedTasks = data.tasks.filter((task) => deletedIds.has(task.id));
+    if (!deletedTasks.length) return;
     get().commit({
       ...data,
       tasks: data.tasks
-        .filter((t) => t.id !== id)
+        .filter((task) => !deletedIds.has(task.id))
         .map((t) => ({
           ...t,
-          links: t.links.filter((l) => l !== id),
-          blockedBy: t.blockedBy.filter((l) => l !== id),
-          parentId: t.parentId === id ? null : t.parentId,
+          links: t.links.filter((id) => !deletedIds.has(id)),
+          blockedBy: t.blockedBy.filter((id) => !deletedIds.has(id)),
+          parentId: t.parentId && deletedIds.has(t.parentId) ? null : t.parentId,
         })),
     });
-    set({ selected: null, selection: [] });
-    get().notify('Card deleted', () => {
-      if (task) {
-        const current = get().data;
-        get().commit({
-          ...current,
-          tasks: [
-            ...current.tasks.map((t) => {
-              const old = data.tasks.find((o) => o.id === t.id);
-              return {
-                ...t,
-                links: [...new Set([...t.links, ...(old?.links.includes(id) ? [id] : [])])],
-                blockedBy: [
-                  ...new Set([...t.blockedBy, ...(old?.blockedBy.includes(id) ? [id] : [])]),
-                ],
-                parentId: old?.parentId === id ? id : t.parentId,
-              };
-            }),
-            task,
-          ],
-        });
-      }
+    set((state) => ({
+      selected: state.selected && deletedIds.has(state.selected) ? null : state.selected,
+      selection: state.selection.filter((id) => !deletedIds.has(id)),
+    }));
+    const label =
+      deletedTasks.length === 1 ? 'Card deleted' : `${deletedTasks.length} cards deleted`;
+    get().notify(label, () => {
+      const current = get().data;
+      const present = new Set(current.tasks.map((task) => task.id));
+      get().commit({
+        ...current,
+        tasks: [
+          ...current.tasks.map((task) => {
+            const old = data.tasks.find((entry) => entry.id === task.id);
+            if (!old) return task;
+            return {
+              ...task,
+              links: [...new Set([...task.links, ...old.links.filter((id) => deletedIds.has(id))])],
+              blockedBy: [
+                ...new Set([
+                  ...task.blockedBy,
+                  ...old.blockedBy.filter((id) => deletedIds.has(id)),
+                ]),
+              ],
+              parentId: old.parentId && deletedIds.has(old.parentId) ? old.parentId : task.parentId,
+            };
+          }),
+          ...deletedTasks.filter((task) => !present.has(task.id)),
+        ],
+      });
     });
   },
   duplicateTask: (id) => {
@@ -238,6 +251,56 @@ export const useDeck = create<Store>((set, get) => ({
     get().commit({ ...data, stacks: [...data.stacks, { ...stack, id }] });
     get().setView(`stack:${id}`);
     get().setModal(null);
+  },
+  deleteStack: (id) => {
+    const data = get().data;
+    const stack = data.stacks.find((entry) => entry.id === id);
+    if (!stack) return;
+    const stackIndex = data.stacks.indexOf(stack);
+    const cardIds = new Set(
+      data.tasks.filter((task) => task.stackId === id).map((task) => task.id),
+    );
+    get().commit({
+      ...data,
+      stacks: data.stacks
+        .filter((entry) => entry.id !== id)
+        .map((entry) => ({ ...entry, links: entry.links.filter((link) => link !== id) })),
+      tasks: data.tasks.map((task) =>
+        task.stackId === id ? { ...task, stackId: null, destination: 'inbox' } : task,
+      ),
+      goals: data.goals.map((goal) => ({
+        ...goal,
+        stackIds: goal.stackIds.filter((stackId) => stackId !== id),
+      })),
+    });
+    if (get().view === `stack:${id}`) get().setView('inbox');
+    get().notify(`“${stack.name}” deleted. Cards moved to Inbox.`, () => {
+      const current = get().data;
+      const stacks = [...current.stacks];
+      if (!stacks.some((entry) => entry.id === id))
+        stacks.splice(Math.min(stackIndex, stacks.length), 0, stack);
+      get().commit({
+        ...current,
+        stacks: stacks.map((entry) => {
+          const old = data.stacks.find((previous) => previous.id === entry.id);
+          return old
+            ? {
+                ...entry,
+                links: [...new Set([...entry.links, ...old.links.filter((link) => link === id)])],
+              }
+            : entry;
+        }),
+        tasks: current.tasks.map((task) =>
+          cardIds.has(task.id) && task.stackId === null ? { ...task, stackId: id } : task,
+        ),
+        goals: current.goals.map((goal) => {
+          const old = data.goals.find((previous) => previous.id === goal.id);
+          return old?.stackIds.includes(id) && !goal.stackIds.includes(id)
+            ? { ...goal, stackIds: [...goal.stackIds, id] }
+            : goal;
+        }),
+      });
+    });
   },
   duplicateStack: (sourceId) => {
     const data = get().data;

@@ -22,6 +22,21 @@ npm run desktop:build  # Native executable and platform installers
 
 The desktop app needs no web server or network after installation. The browser version caches its assets after the first successful production load, including SQLite WASM, graph workers, and fonts. Development mode requires Vite.
 
+## Install on another Mac
+
+Build a universal installer on macOS for both Apple Silicon and Intel Macs:
+
+```sh
+rustup target add aarch64-apple-darwin x86_64-apple-darwin
+npm run desktop:build:mac
+```
+
+The installer is `src-tauri/target/universal-apple-darwin/release/bundle/dmg/Deck_0.1.0_universal.dmg`. Copy it to the other Mac, open it, drag Deck into Applications, eject the disk image, and launch Deck from Applications. The destination Mac needs no Node, Rust, or development server.
+
+This personal build is not Developer ID signed or notarized. If macOS blocks the first launch because the developer cannot be verified, try opening Deck once, then choose **System Settings → Privacy & Security → Open Anyway**. See [Apple's instructions](https://support.apple.com/102445).
+
+Your existing data is not included in the installer. To transfer it, export JSON from **Settings → Data** on the original computer, then import that file on the other Mac. Each Mac stores its own workspace; changes do not sync automatically.
+
 ## Everyday use
 
 - Inbox, Today, On Deck, Anytime, Someday, and the chronological Logbook.
@@ -175,3 +190,22 @@ The initial workspace contains realistic demo cards. An empty workspace is seede
 [MIT NON-AI License](LICENSE). This custom, source-available license permits use, modification, and redistribution subject to its terms, but **prohibits all AI/ML use of the code**, including training, inference, AI integrations, and supplying the code to AI coding tools, unless separately authorized in writing by the applicable copyright holder(s). It is not the standard MIT License or an OSI-approved open-source license.
 
 Third-party components and assets retain their own licenses. Previously granted licenses are not retroactively revoked. See the license file for the full terms.
+
+## House Edge browser analytics
+
+The browser version includes House Edge page/view tracking, anonymous sessions, errors, and Web Vitals. Native Tauri sessions are always excluded, even when analytics environment variables are set. Named views are mapped to fixed paths; project names, file contents, and search text are not used as page names.
+
+Create a House Edge project with key `deck` and allow this site's exact origin. Set `VITE_HOUSE_EDGE_KEY` to its **browser ingestion key** and `VITE_HOUSE_EDGE_ENDPOINT` to your collector URL ending in `/api/collect`, using `.env.local` or your build environment. `.env.example` lists the settings. Rebuild and redeploy the browser version, then check Live Activity for `page_view` and `session_start` after about five seconds.
+
+Tracking is off when the key or endpoint is missing, and development requires `VITE_HOUSE_EDGE_TRACK_DEVELOPMENT=true`. Do Not Track is respected. The SDK is installed from the checked-in `vendor/house-edge-analytics-0.1.1.tgz`, so independent builds need no sibling House Edge checkout. Commit the tarball with its package manifest and lockfile.
+
+### Web accounts and synchronization
+
+Deck now includes an opt-in authenticated web portal, a PostgreSQL/Better Auth API,
+automatic browser/desktop sync, recovery history, account exports, mobile navigation,
+and an offline PWA shell. The existing standalone mode remains available.
+
+See [the portal setup and architecture guide](docs/portal.md) for environment variables,
+Google OAuth, migrations, desktop connection, deployment, retention, and integration tests.
+The [Azure free-tier deployment guide](docs/azure-free.md) describes the hosted
+Azure SQL, App Service, and Microsoft Entra External ID variant.
