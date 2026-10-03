@@ -214,3 +214,7 @@ See [the portal setup and architecture guide](docs/portal.md) for environment va
 Google OAuth, migrations, desktop connection, deployment, retention, and integration tests.
 The [Azure free-tier deployment guide](docs/azure-free.md) describes the hosted
 Azure SQL, App Service, and Microsoft Entra External ID variant.
+
+## macOS Release
+
+Run `npm run release:mac:check` to validate prerequisites, then `npm run release:desktop` for Developer ID signed, notarized ARM64, Intel and universal apps/DMGs. See [macOS release setup, credentials, outputs and verification](docs/MACOS_RELEASE.md). Existing development and Windows/Linux commands remain available.

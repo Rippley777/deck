@@ -1,0 +1,13 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "bundle": {
+    "targets": ["app", "dmg"],
+    "macOS": {
+      "signingIdentity": "Developer ID Application: Ally Rippley (YM4H8YJWGU)",
+      "hardenedRuntime": true
+    }
+  },
+  "build": {
+    "beforeBuildCommand": "npm run build"
+  }
+}
