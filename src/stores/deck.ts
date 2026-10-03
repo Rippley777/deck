@@ -41,6 +41,7 @@ interface Store {
   duplicateTask: (id: string) => void;
   addStack: (stack: Omit<Stack, 'id'>) => void;
   deleteStack: (id: string) => void;
+  deleteStackHeading: (stackId: string, heading: string) => void;
   duplicateStack: (id: string) => void;
   setView: (view: View) => void;
   setModal: (modal: Modal) => void;
@@ -78,7 +79,20 @@ export const useDeck = create<Store>((set, get) => ({
     initializing = (async () => {
       try {
         const saved = await repository.load();
-        const data = withTemplates(saved || (import.meta.env.VITE_DECK_PORTAL === 'true' ? { cloudPristine: true, version: 1 as const, tasks: [], stacks: [], goals: [], headings: [], settings: defaultSettings } : seedData()));
+        const data = withTemplates(
+          saved ||
+            (import.meta.env.VITE_DECK_PORTAL === 'true'
+              ? {
+                  cloudPristine: true,
+                  version: 1 as const,
+                  tasks: [],
+                  stacks: [],
+                  goals: [],
+                  headings: [],
+                  settings: defaultSettings,
+                }
+              : seedData()),
+        );
         if (data !== saved) await repository.save(data);
         set({ data, ready: true });
       } catch (e) {
@@ -299,6 +313,47 @@ export const useDeck = create<Store>((set, get) => ({
             ? { ...goal, stackIds: [...goal.stackIds, id] }
             : goal;
         }),
+      });
+    });
+  },
+  deleteStackHeading: (stackId, heading) => {
+    const data = get().data;
+    const stack = data.stacks.find((entry) => entry.id === stackId);
+    if (!stack || !stack.headings.includes(heading)) return;
+    const headingIndex = stack.headings.indexOf(heading);
+    const cardIds = new Set(
+      data.tasks
+        .filter((task) => task.stackId === stackId && task.heading === heading)
+        .map((task) => task.id),
+    );
+    const now = new Date().toISOString();
+    get().commit({
+      ...data,
+      stacks: data.stacks.map((entry) =>
+        entry.id === stackId
+          ? { ...entry, headings: entry.headings.filter((name) => name !== heading) }
+          : entry,
+      ),
+      tasks: data.tasks.map((task) =>
+        cardIds.has(task.id) ? { ...task, heading: '', updatedAt: now } : task,
+      ),
+    });
+    get().notify(`“${heading}” deleted. Cards kept in this stack.`, () => {
+      const current = get().data;
+      if (!current.stacks.some((entry) => entry.id === stackId)) return;
+      get().commit({
+        ...current,
+        stacks: current.stacks.map((entry) => {
+          if (entry.id !== stackId || entry.headings.includes(heading)) return entry;
+          const headings = [...entry.headings];
+          headings.splice(Math.min(headingIndex, headings.length), 0, heading);
+          return { ...entry, headings };
+        }),
+        tasks: current.tasks.map((task) =>
+          cardIds.has(task.id) && task.stackId === stackId && task.heading === ''
+            ? { ...task, heading, updatedAt: new Date().toISOString() }
+            : task,
+        ),
       });
     });
   },

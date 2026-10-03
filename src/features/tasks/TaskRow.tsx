@@ -9,6 +9,12 @@ export function TaskRow({ task, showStack = true }: { task: Task; showStack?: bo
   const { data, completeTask, select, selection, updateTask } = useDeck();
   const stack = data.stacks.find((s) => s.id === task.stackId);
   const checked = selection.includes(task.id);
+  const toggleSelection = () =>
+    useDeck.setState((state) => ({
+      selection: state.selection.includes(task.id)
+        ? state.selection.filter((id) => id !== task.id)
+        : [...state.selection, task.id],
+    }));
   return (
     <div
       className={`task-row ${task.completedAt ? 'is-complete' : ''} ${checked ? 'is-selected' : ''}`}
@@ -36,12 +42,11 @@ export function TaskRow({ task, showStack = true }: { task: Task; showStack?: bo
       }}
       onClick={(e) => {
         if (e.metaKey || e.ctrlKey || e.shiftKey) {
-          useDeck.setState({
-            selection: checked ? selection.filter((id) => id !== task.id) : [...selection, task.id],
-          });
+          toggleSelection();
         } else select(task.id);
       }}
       onKeyDown={(e) => {
+        if (e.target !== e.currentTarget) return;
         if (e.key === 'ContextMenu' || (e.shiftKey && e.key === 'F10')) {
           templateMenu.open(e, { taskId: task.id });
           return;
@@ -110,6 +115,15 @@ export function TaskRow({ task, showStack = true }: { task: Task; showStack?: bo
           </span>
         )}
       </div>
+      <input
+        type="checkbox"
+        className="task-select"
+        aria-label={`Select ${task.title}`}
+        title="Select card for bulk actions"
+        checked={checked}
+        onClick={(e) => e.stopPropagation()}
+        onChange={toggleSelection}
+      />
     </div>
   );
 }

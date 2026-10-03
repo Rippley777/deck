@@ -29,6 +29,7 @@ import { DeckProgress, DeckProgressTooltip } from '../../components/progress/Dec
 import { isInTodayDeck, taskProgress, progressSummary } from '../../lib/progress';
 import type { Task } from '../../types';
 import { StackGlyph } from '../../components/StackGlyph';
+import { useTemplateContextMenu } from '../../components/TemplateContextMenu';
 const StackIconPicker = lazy(() =>
   import('../../components/StackIconPicker').then((m) => ({ default: m.StackIconPicker })),
 );
@@ -48,6 +49,7 @@ const titles: Record<string, string> = {
   logbook: 'Logbook',
 };
 export function TaskView() {
+  const headingMenu = useTemplateContextMenu();
   const {
     data,
     view,
@@ -158,6 +160,7 @@ export function TaskView() {
   }
   return (
     <>
+      {headingMenu.menu}
       <div className="workspace-scroll">
         <div className={`page-wrap ${view === 'today' ? 'today-page' : ''}`}>
           <main className="task-main">
@@ -389,6 +392,17 @@ export function TaskView() {
                   >
                     <button
                       aria-expanded={!collapsed.includes(name)}
+                      onContextMenu={(e) => {
+                        if (stack?.headings.includes(name))
+                          headingMenu.open(e, { stackId: stack.id, heading: name });
+                      }}
+                      onKeyDown={(e) => {
+                        if (
+                          stack?.headings.includes(name) &&
+                          (e.key === 'ContextMenu' || (e.shiftKey && e.key === 'F10'))
+                        )
+                          headingMenu.open(e, { stackId: stack.id, heading: name });
+                      }}
                       onClick={() =>
                         setCollapsed(
                           collapsed.includes(name)

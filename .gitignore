@@ -2,6 +2,8 @@ node_modules/
 dist/
 deck-azure-free.zip
 src-tauri/target/
+releases/
+build-history/
 playwright-report/
 test-results/
 .DS_Store

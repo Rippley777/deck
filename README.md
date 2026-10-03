@@ -6,7 +6,7 @@ A local-first desktop task manager built with Tauri 2, Rust, React 19, TypeScrip
 
 ## Run
 
-Requires Node 20.19+ (or Node 22+) and npm. The desktop build also requires the Tauri prerequisites for your operating system. Rust 1.90 is pinned in `rust-toolchain.toml`.
+Requires Node 22+ and npm. The desktop build also requires the Tauri prerequisites for your operating system. Rust 1.90 is pinned in `rust-toolchain.toml`.
 
 ```sh
 npm install
@@ -17,21 +17,24 @@ npm run desktop        # Native desktop; reuses an existing Deck dev server
 ```sh
 npm run build          # Typecheck and build the offline-capable web app
 npm run preview        # Serve the production web build
-npm run desktop:build  # Native executable and platform installers
+npm run release        # Archive previous installers, then build for this OS
+npm run desktop:build  # Alias for npm run release
 ```
 
 The desktop app needs no web server or network after installation. The browser version caches its assets after the first successful production load, including SQLite WASM, graph workers, and fonts. Development mode requires Vite.
 
 ## Install on another Mac
 
-Build a universal installer on macOS for both Apple Silicon and Intel Macs:
+Build separate Apple Silicon and Intel installers on macOS:
 
 ```sh
 rustup target add aarch64-apple-darwin x86_64-apple-darwin
-npm run desktop:build:mac
+npm run release
 ```
 
-The installer is `src-tauri/target/universal-apple-darwin/release/bundle/dmg/Deck_0.1.0_universal.dmg`. Copy it to the other Mac, open it, drag Deck into Applications, eject the disk image, and launch Deck from Applications. The destination Mac needs no Node, Rust, or development server.
+Installers are collected in `releases/current/macos/arm64/` and `releases/current/macos/x64/`. For a universal installer containing both architectures, use `npm run desktop:build:mac`; its output is `releases/current/macos/universal/Deck-0.1.0-macos-universal.dmg`. A target is successful only when its expected bundles were generated and verified. Copy the appropriate DMG to the other Mac, open it, drag Deck into Applications, eject the disk image, and launch Deck from Applications. The destination Mac needs no Node, Rust, or development server.
+
+Every desktop release first copies existing distributables into `build-history/v<version>_YYYY-MM-DD_HH-mm-ss/` and verifies the copies. An archive failure stops the build. History is never automatically deleted. The same release command builds MSI/NSIS installers on Windows x64 and AppImage/DEB/RPM packages on Linux x64. GitHub Actions builds on four native runners, triggered manually or by a matching `v<version>` tag. See [Desktop releases](docs/releases.md) for prerequisites, manifests, checksums, failure behavior, signing, and CI downloads.
 
 This personal build is not Developer ID signed or notarized. If macOS blocks the first launch because the developer cannot be verified, try opening Deck once, then choose **System Settings → Privacy & Security → Open Anyway**. See [Apple's instructions](https://support.apple.com/102445).
 
@@ -42,7 +45,8 @@ Your existing data is not included in the installer. To transfer it, export JSON
 - Inbox, Today, On Deck, Anytime, Someday, and the chronological Logbook.
 - Editable cards with Markdown notes, checklists, separate work dates and deadlines, time, stack, section, tags, priority, effort, recurrence, and a parent card.
 - Drag cards between sections, onto other cards, into sidebar destinations or stacks, and onto dates in the week strip. Drag sidebar stacks to reorder them.
-- Shift/Cmd/Ctrl-click cards for bulk scheduling, completion, and stack changes.
+- Check the selection boxes beside cards (or Shift/Cmd/Ctrl-click) for bulk scheduling, completion, stack changes, and deletion. Bulk deletion includes Undo.
+- Right-click a heading inside a stack to delete it and keep its cards in the stack’s Cards section. Undo restores the heading and its card assignments.
 - Completion includes Undo. Recurring completion creates one next occurrence, with a fresh checklist; Undo also removes that occurrence.
 - Deal Your Day intentionally pulls cards into Today. Shuffle ranks actionable cards by priority, overdue deadlines, effort, age, and current stack; blocked cards are excluded.
 - Stack settings include notes, a deadline, headings, and related stacks. New and existing stacks and templates can use 429 searchable Lucide icons with color swatches or a custom hex color; older symbol icons keep rendering. Goals and their stacks can be managed under Settings → Advanced.
@@ -92,6 +96,7 @@ Every application opens a preview. Select All, Clear All, and individual checkbo
 
 - Stack templates create a new stack with headings, independent cards, and optional milestone cards.
 - Task templates create a parent card with child cards, checklist items, or both. A task template can also contain only the parent’s notes, tags, effort, and priority.
+- Applying a template to an existing stack creates a top-level heading using the generated title, with all generated cards beneath it. Repeated applications get separate numbered headings. Parent cards, checklists, and dependencies are preserved; templates used to create a new stack keep their original section headings.
 - Checklist templates append checked items to the existing card, or create a new card when used from the global picker.
 - Dependencies connect generated cards using fresh IDs and appear in Graph View. Dependencies on skipped items are omitted. A checklist’s parent must be selected; a child card whose parent is skipped becomes a top-level card (or belongs to the generated root task).
 - Milestones remain ordinary editable, completable cards, identified by a badge in lists and a diamond in Graph View.

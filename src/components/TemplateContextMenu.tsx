@@ -9,6 +9,7 @@ export function useTemplateContextMenu() {
     y: number;
     taskId?: string;
     stackId?: string;
+    heading?: string;
     anchor: HTMLElement;
   } | null>(null);
   const ref = useRef<HTMLDivElement>(null);
@@ -34,7 +35,7 @@ export function useTemplateContextMenu() {
   }, [menu]);
   const open = (
     event: MouseEvent<HTMLElement> | KeyboardEvent<HTMLElement>,
-    target: { taskId?: string; stackId?: string },
+    target: { taskId?: string; stackId?: string; heading?: string },
   ) => {
     event.preventDefault();
     event.stopPropagation();
@@ -54,7 +55,7 @@ export function useTemplateContextMenu() {
         <div
           ref={ref}
           role="menu"
-          aria-label="Template actions"
+          aria-label={menu.heading !== undefined ? 'Heading actions' : 'Template actions'}
           className="template-context-menu"
           onClick={(e) => e.stopPropagation()}
           onContextMenu={(e) => {
@@ -86,44 +87,53 @@ export function useTemplateContextMenu() {
             }
           }}
         >
-          <button
-            role="menuitem"
-            onClick={() => {
-              useDeck
-                .getState()
-                .openTemplates(
-                  menu.taskId
-                    ? { scope: 'checklist', taskId: menu.taskId }
-                    : { scope: 'task', stackId: menu.stackId },
-                );
-              setMenu(null);
-            }}
-          >
-            {menu.taskId ? 'Insert checklist from template' : 'New card from template'}
-          </button>
-          <button
-            role="menuitem"
-            onClick={() => {
-              useDeck.getState().openTemplates({
-                library: true,
-                sourceTaskId: menu.taskId,
-                sourceStackId: menu.stackId,
-              });
-              setMenu(null);
-            }}
-          >
-            Save {menu.taskId ? 'card' : 'stack'} as template
-          </button>
+          {menu.heading === undefined && (
+            <>
+              <button
+                role="menuitem"
+                onClick={() => {
+                  useDeck
+                    .getState()
+                    .openTemplates(
+                      menu.taskId
+                        ? { scope: 'checklist', taskId: menu.taskId }
+                        : { scope: 'task', stackId: menu.stackId },
+                    );
+                  setMenu(null);
+                }}
+              >
+                {menu.taskId ? 'Insert checklist from template' : 'New card from template'}
+              </button>
+              <button
+                role="menuitem"
+                onClick={() => {
+                  useDeck.getState().openTemplates({
+                    library: true,
+                    sourceTaskId: menu.taskId,
+                    sourceStackId: menu.stackId,
+                  });
+                  setMenu(null);
+                }}
+              >
+                Save {menu.taskId ? 'card' : 'stack'} as template
+              </button>
+            </>
+          )}
           <button
             role="menuitem"
             className="destructive"
             onClick={() => {
               if (menu.taskId) useDeck.getState().deleteTask(menu.taskId);
-              if (menu.stackId) useDeck.getState().deleteStack(menu.stackId);
+              if (menu.stackId) {
+                if (menu.heading !== undefined)
+                  useDeck.getState().deleteStackHeading(menu.stackId, menu.heading);
+                else useDeck.getState().deleteStack(menu.stackId);
+              }
               setMenu(null);
             }}
           >
-            <Trash2 size={14} /> Delete {menu.taskId ? 'card' : 'stack'}
+            <Trash2 size={14} /> Delete{' '}
+            {menu.heading !== undefined ? 'heading' : menu.taskId ? 'card' : 'stack'}
           </button>
         </div>,
         document.body,

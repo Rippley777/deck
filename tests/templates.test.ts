@@ -160,6 +160,60 @@ describe('template generation', () => {
     expect(updated.checklist).toHaveLength(original.checklist.length + 6);
     expect(updated.checklist.slice(0, original.checklist.length)).toEqual(original.checklist);
     expect(original.checklist).toHaveLength(3);
+    expect(result.data.stacks).toEqual(data.stacks);
+  });
+  it.each(['New Feature', 'Software Project', 'Deploy Checklist'])(
+    'groups %s under a new top-level heading when applied to an existing stack',
+    (name) => {
+      const data = workspace();
+      const template = preset(name);
+      const result = generateFromTemplate(data, template, {
+        ...options(template),
+        stackId: 'oddware',
+        heading: 'Cards',
+      });
+      const heading = template.title.replace('{{project_name}}', 'Repo Reaper');
+      const generated = result.data.tasks.slice(data.tasks.length);
+      expect(result.stackId).toBe('oddware');
+      expect(result.data.stacks).toHaveLength(data.stacks.length);
+      expect(result.data.stacks.find((s) => s.id === 'oddware')!.headings).toEqual([
+        ...data.stacks.find((s) => s.id === 'oddware')!.headings,
+        heading,
+      ]);
+      expect(generated.length).toBeGreaterThan(0);
+      expect(
+        generated.every((card) => card.stackId === 'oddware' && card.heading === heading),
+      ).toBe(true);
+      expect(result.data.tasks.slice(0, data.tasks.length)).toEqual(data.tasks);
+      expect(result.data.stacks.filter((s) => s.id !== 'oddware')).toEqual(
+        data.stacks.filter((s) => s.id !== 'oddware'),
+      );
+      if (template.scope === 'stack') {
+        expect(generated[1].blockedBy).toEqual([generated[0].id]);
+      } else {
+        const root = generated.find((card) => card.id === result.taskId)!;
+        expect(root.notes).toBe(template.notes);
+        if (template.scope === 'checklist') expect(root.checklist).toHaveLength(6);
+        else expect(generated.slice(1).every((card) => card.parentId === root.id)).toBe(true);
+      }
+    },
+  );
+  it('uses the default destination stack for task templates and separates repeated headings', () => {
+    const data = workspace();
+    const template = preset('New Feature');
+    template.defaultStackId = 'oddware';
+    const first = generateFromTemplate(data, template, options(template));
+    const again = generateFromTemplate(first.data, template, options(template));
+    expect(again.data.stacks.find((s) => s.id === 'oddware')!.headings).toContain(
+      'New Feature: Repo Reaper (2)',
+    );
+    expect(
+      again.data.tasks
+        .slice(first.data.tasks.length)
+        .every((card) => card.heading === 'New Feature: Repo Reaper (2)'),
+    ).toBe(true);
+    const reserved = generateFromTemplate(data, template, { ...options(template), title: 'Cards' });
+    expect(reserved.data.stacks.find((s) => s.id === 'oddware')!.headings).toContain('Cards (2)');
   });
 });
 describe('template library safety', () => {

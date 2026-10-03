@@ -1,0 +1,81 @@
+name: Build desktop releases
+
+on:
+  workflow_dispatch:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: read
+
+concurrency:
+  group: desktop-release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: ${{ matrix.name }}
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 90
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: macos-arm64
+            runner: macos-14
+            target: aarch64-apple-darwin
+          - name: macos-x64
+            runner: macos-15-intel
+            target: x86_64-apple-darwin
+          - name: windows-x64
+            runner: windows-2022
+            target: x86_64-pc-windows-msvc
+          - name: linux-x64
+            runner: ubuntu-22.04
+            target: x86_64-unknown-linux-gnu
+    env:
+      APPIMAGE_EXTRACT_AND_RUN: '1'
+      VITE_DECK_PORTAL: 'false'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Install Linux packaging dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf libdbus-1-dev xdg-utils rpm
+      - name: Install pinned Rust toolchain and target
+        shell: bash
+        run: |
+          rustup show
+          rustup target add '${{ matrix.target }}'
+      - run: npm ci
+      - name: Verify release safety
+        run: npm run test:release
+      - name: Check tag matches the application version
+        if: startsWith(github.ref, 'refs/tags/')
+        shell: bash
+        run: |
+          node --input-type=module -e 'import fs from "node:fs"; const version = JSON.parse(fs.readFileSync("package.json", "utf8")).version; if (process.env.GITHUB_REF_NAME !== `v${version}`) throw new Error(`Tag must match v${version}`);'
+      - name: Build and collect native installers
+        run: npm run release -- --target ${{ matrix.target }}
+      # Tar preserves executable bits and .app symlinks that upload-artifact does not.
+      # Always upload collected partial output if a later installer build failed.
+      - name: Package distributables for upload
+        if: always()
+        shell: bash
+        run: |
+          if [ -d releases/current ]; then
+            tar -czf 'releases/Deck-${{ matrix.name }}-${{ github.run_id }}-${{ github.run_attempt }}.tar.gz' -C releases/current .
+          fi
+      - name: Upload distributables and manifests
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Deck-${{ matrix.name }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: releases/*.tar.gz
+          if-no-files-found: warn
+          retention-days: 90

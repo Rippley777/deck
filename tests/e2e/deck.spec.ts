@@ -3,6 +3,48 @@ test.beforeEach(async ({ page }) => {
   await page.goto('/');
   await expect(page.getByRole('heading', { name: 'Today’s Deck' })).toBeVisible();
 });
+test('checkbox selection deletes multiple cards with undo and persists deletion', async ({
+  page,
+}) => {
+  const first = page.getByRole('checkbox', { name: 'Select Call insurance', exact: true });
+  const second = page.getByRole('checkbox', { name: 'Select Deploy Repo Reaper', exact: true });
+  await first.check();
+  await second.focus();
+  await second.press('Space');
+  await expect(second).toBeChecked();
+  await expect(page.locator('.bulk-toolbar')).toContainText('2 selected');
+  await expect(page.getByRole('textbox', { name: 'Task title' })).not.toBeVisible();
+  await expect(
+    page.getByRole('button', { name: 'Complete Deploy Repo Reaper', exact: true }),
+  ).toBeVisible();
+  await first.uncheck();
+  await expect(page.locator('.bulk-toolbar')).toContainText('1 selected');
+  await first.check();
+  await page.getByRole('button', { name: 'Delete 2 selected cards', exact: true }).click();
+  await expect(first).not.toBeVisible();
+  await expect(second).not.toBeVisible();
+  await expect(page.locator('.bulk-toolbar')).not.toBeVisible();
+  await expect(
+    page.getByRole('button', { name: 'Open Order groceries', exact: true }),
+  ).toBeVisible();
+  await page.getByRole('button', { name: 'Undo', exact: true }).click();
+  await expect(first).toBeVisible();
+  await expect(second).toBeVisible();
+  await expect(first).not.toBeChecked();
+  await first.check();
+  await second.check();
+  await page.getByRole('button', { name: 'Clear selection', exact: true }).click();
+  await expect(first).not.toBeChecked();
+  await expect(second).not.toBeChecked();
+  await first.check();
+  await second.check();
+  await page.getByRole('button', { name: 'Delete 2 selected cards', exact: true }).click();
+  await expect(page.getByText('All changes saved')).toBeVisible();
+  await page.reload();
+  await expect(page.getByRole('heading', { name: 'Today’s Deck' })).toBeVisible();
+  await expect(first).not.toBeVisible();
+  await expect(second).not.toBeVisible();
+});
 test('capture, edit, checklist, complete, undo, and persist a card', async ({ page }) => {
   await page.getByRole('button', { name: 'Add card ⌘ N' }).click();
   await page

@@ -290,11 +290,8 @@ export function TemplateDialog() {
               commit(result.data);
               setModal(null);
               sessionStorage.removeItem('deck-add-heading');
-              if (chosen.scope === 'stack') setView(`stack:${result.stackId}`);
-              else if (result.taskId) {
-                if (result.stackId) setView(`stack:${result.stackId}`);
-                select(result.taskId);
-              }
+              if (result.stackId) setView(`stack:${result.stackId}`);
+              if (result.taskId) select(result.taskId);
               notify(
                 creatingChecklist
                   ? `${result.count} checklist items added.`
@@ -336,7 +333,11 @@ export function TemplateDialog() {
             <div className="template-setup">
               {!creatingChecklist && (
                 <label>
-                  {chosen.scope === 'stack' ? 'Stack name' : 'Task title'}
+                  {stackId
+                    ? 'Heading title'
+                    : chosen.scope === 'stack'
+                      ? 'Stack name'
+                      : 'Task title'}
                   <input
                     className="field"
                     aria-label={
@@ -349,15 +350,16 @@ export function TemplateDialog() {
                   <small>Leave blank to use the template title.</small>
                 </label>
               )}
-              {chosen.scope !== 'stack' && !creatingChecklist && (
+              {!creatingChecklist && (
                 <label>
                   Stack
                   <select
                     className="field"
+                    aria-label="Template destination stack"
                     value={stackId}
                     onChange={(e) => setStackId(e.target.value)}
                   >
-                    <option value="">No stack</option>
+                    <option value="">{chosen.scope === 'stack' ? 'New stack' : 'No stack'}</option>
                     {data.stacks.map((stack) => (
                       <option key={stack.id} value={stack.id}>
                         {stack.name}
@@ -403,8 +405,12 @@ export function TemplateDialog() {
                 {creatingChecklist
                   ? 'Checked items will be added to your existing checklist.'
                   : chosen.scope === 'stack'
-                    ? 'Your cards will keep these headings. Everything stays editable.'
-                    : 'Tasks become child cards. Checklist items stay inside their parent card.'}
+                    ? stackId
+                      ? 'Your cards will go under a new heading in this stack.'
+                      : 'Your cards will keep these headings. Everything stays editable.'
+                    : stackId
+                      ? 'Your cards will go under a new heading in this stack. Checklist items stay inside their parent card.'
+                      : 'Tasks become child cards. Checklist items stay inside their parent card.'}
               </p>
             </div>
             <div className="template-item-preview">
@@ -506,9 +512,11 @@ export function TemplateDialog() {
               <Sparkles size={14} />
               {creatingChecklist
                 ? 'Insert checklist'
-                : chosen.scope === 'stack'
-                  ? 'Create stack'
-                  : 'Create task'}
+                : stackId
+                  ? 'Add to stack'
+                  : chosen.scope === 'stack'
+                    ? 'Create stack'
+                    : 'Create task'}
             </button>
           </div>
         </form>

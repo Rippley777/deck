@@ -158,7 +158,21 @@ export function generateFromTemplate(
     existing?.stackId ??
     (data.stacks.some((stack) => stack.id === requestedStack) ? requestedStack : null);
   const stacks = [...data.stacks];
-  if (template.scope === 'stack') {
+  const destinationStack =
+    !existing && stackId ? data.stacks.find((stack) => stack.id === stackId) : undefined;
+  const addToStack =
+    destinationStack && (template.scope !== 'stack' || options.stackId !== undefined);
+  let templateHeading: string | undefined;
+  if (addToStack) {
+    const headings = new Set(['Cards', ...destinationStack.headings]);
+    templateHeading = title;
+    for (let suffix = 2; headings.has(templateHeading); suffix++)
+      templateHeading = `${title} (${suffix})`;
+    stacks[stacks.indexOf(destinationStack)] = {
+      ...destinationStack,
+      headings: [...destinationStack.headings, templateHeading],
+    };
+  } else if (template.scope === 'stack') {
     stackId = crypto.randomUUID();
     stacks.push({
       id: stackId,
@@ -185,7 +199,7 @@ export function generateFromTemplate(
           priority: template.priority,
           effort: template.effort,
           scheduled: options.scheduled ?? null,
-          heading: options.heading || '',
+          heading: templateHeading || options.heading || '',
         })
       : undefined;
   const taskIds = new Map(
@@ -199,7 +213,7 @@ export function generateFromTemplate(
         id: taskIds.get(item.id)!,
         stackId,
         kind: item.kind === 'milestone' ? 'milestone' : 'task',
-        heading: replace(item.heading) || options.heading || '',
+        heading: templateHeading || replace(item.heading) || options.heading || '',
         notes: replace(item.notes),
         tags: [
           ...new Set([
