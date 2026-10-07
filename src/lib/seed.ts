@@ -6,7 +6,7 @@ export function makeTask(title: string, patch: Partial<Task> = {}): Task {
     title,
     notes: '',
     stackId: null,
-    heading: 'Focus today',
+    heading: '',
     tags: [],
     scheduled: null,
     deadline: null,
@@ -185,7 +185,7 @@ export function seedData(): DeckData {
       stackId: 'work',
       completedAt: new Date(addDays(-1) + 'T16:00:00').toISOString(),
     }),
-  ].map((t, i) => ({ ...t, order: i }));
+  ].map((t, i) => ({ ...t, heading: t.heading || 'Focus today', order: i }));
   return {
     version: 1,
     tasks,

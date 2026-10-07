@@ -38,7 +38,13 @@ Every desktop release first copies existing distributables into `build-history/v
 
 This personal build is not Developer ID signed or notarized. If macOS blocks the first launch because the developer cannot be verified, try opening Deck once, then choose **System Settings → Privacy & Security → Open Anyway**. See [Apple's instructions](https://support.apple.com/102445).
 
-Your existing data is not included in the installer. To transfer it, export JSON from **Settings → Data** on the original computer, then import that file on the other Mac. Each Mac stores its own workspace; changes do not sync automatically.
+Your existing data is not included in the installer. To transfer it, export JSON from **Settings → Data** on the original computer, then import that file on the other Mac. Each Mac stores its own workspace. Optionally sign in under **Settings → Account** to sync through your Deck cloud service. See [account and sync setup](docs/portal.md).
+
+## First launch and accounts
+
+A new Deck opens to an empty Today view: no tasks, Stacks, tags, headings, or templates. Capture a task immediately; accounts are optional. Tasks, templates, Graph View, Project Discovery, settings, exports, and rotating backups work locally.
+
+The sidebar’s **Local only** footer opens **Settings → Account**. Sign in when you want cloud backup and access from other devices. Deck asks before uploading an existing local Deck, offers to restore an existing cloud Deck, and presents merge or explicit replacement choices when both contain data. Signing out defaults to keeping the local Deck. Different accounts use separate local profiles; retained content cannot be silently uploaded to another account.
 
 ## Everyday use
 
@@ -88,7 +94,7 @@ before:Friday overdue:true
 
 Open **Templates** in the sidebar to manage the library, or **New from template** with Cmd/Ctrl Shift N or the command palette. New Card and New Stack both offer **Start from template**. Right-click a card or sidebar stack (or press Shift F10 while focused) for template actions. Card details can insert a checklist; cards and stacks can also be saved as templates.
 
-Ten built-ins cover Software Project, New Feature, Bug Fix, App Launch, App Deployment, Website Launch, Open Source Release, Home Project, Trip Planning, and Deploy Checklist. The picker supports fuzzy search, favors recent use, then favorites, then your library order.
+The library starts empty. **Add starter templates** explicitly installs ten built-ins covering Software Project, New Feature, Bug Fix, App Launch, App Deployment, Website Launch, Open Source Release, Home Project, Trip Planning, and Deploy Checklist. The picker supports fuzzy search, favors recent use, then favorites, then your library order.
 
 Choose **Customize** on any template card, or **Customize template** from its preview, to edit built-in or custom templates. Change the name, description, icon, color, defaults, notes, headings, variables, and starter items. **Save changes** updates the saved template; **Save as copy** creates a separate version. Editing from a preview returns you there with your entered values and selections preserved, and Cancel discards your edits. Changes apply to future uses; cards already created keep their content.
 
@@ -101,7 +107,7 @@ Every application opens a preview. Select All, Clear All, and individual checkbo
 - Dependencies connect generated cards using fresh IDs and appear in Graph View. Dependencies on skipped items are omitted. A checklist’s parent must be selected; a child card whose parent is skipped becomes a top-level card (or belongs to the generated root task).
 - Milestones remain ordinary editable, completable cards, identified by a badge in lists and a diamond in Graph View.
 
-The visual builder supports task/checklist/milestone types, headings, default selections, drag reordering and keyboard reorder buttons, variables, conditions, parent relationships, dependencies, notes, tags, priority, effort, and a default stack. Cycles and missing references are rejected before saving. Library controls edit, duplicate, delete (with Undo), reorder, favorite, export, and import templates. Standalone exports use a versioned `deck-templates` JSON envelope; importing creates new library entries. Full workspace JSON exports and SQLite backups also include templates, favorites, and recent use. Existing databases receive the starter library once; an intentionally empty library stays empty.
+The visual builder supports task/checklist/milestone types, headings, default selections, drag reordering and keyboard reorder buttons, variables, conditions, parent relationships, dependencies, notes, tags, priority, effort, and a default stack. Cycles and missing references are rejected before saving. Library controls edit, duplicate, delete (with Undo), reorder, favorite, export, and import templates. Standalone exports use a versioned `deck-templates` JSON envelope; importing creates new library entries. Full workspace JSON exports and SQLite backups also include templates, favorites, and recent use. Existing saved templates remain intact; missing or intentionally empty libraries stay empty.
 
 Applying a template makes one workspace commit. Later template edits never change generated cards, and all generated content remains freely editable.
 
@@ -152,16 +158,18 @@ Cytoscape renders a projection of cards, stacks, tags, stack headings, goals, pa
 `src/lib/repository.ts` defines the asynchronous persistence contract.
 
 - **Desktop:** Rust `rusqlite`, bundled SQLite, WAL journaling, `synchronous=FULL`, transactional writes, versioned SQL migrations, and a mutex around the connection. The database is in the platform app-data directory for `app.deck.desktop`; its exact location appears in Settings → Advanced.
-- **Browser:** the same versioned workspace format in a real SQLite database using SQL.js, with binary snapshots committed to IndexedDB transactions. Browser and native workspaces are independent; JSON export/import transfers between them.
+- **Browser:** the same versioned workspace format in a real SQLite database using SQL.js, with binary snapshots committed to IndexedDB transactions. Browser and native workspaces are independent local copies. Optional account sync or JSON export/import transfers between them.
 - Up to 14 rotating database backups, daily or weekly on writes. Manual backup and restore are in Settings. Restore keeps a before-restore snapshot.
-- Data currently uses a versioned workspace document inside SQLite. Stable entity IDs and the repository interface provide the boundary for future storage/sync changes. No cloud sync, account service, telemetry, or network API is implemented.
+- Data uses a versioned workspace document inside SQLite. Stable IDs, durable baselines, three-way merges, server revision history, and deletion markers support optional background sync. Device-specific profile identity and discovered repository paths remain local. Cloud failures leave local data available. See [the portal architecture](docs/portal.md).
 - Browser storage can be removed by clearing site data; export important work. Local backups are on the same device and are not an off-device backup.
 
 ## Import and export
 
 Export JSON, CSV, or Markdown under Settings → Data. Desktop export uses a native save dialog; browser export downloads a file.
 
-Import a Deck JSON export, an array of card objects, or CSV with a `title` column. A preview shows the resulting card/stack count. Matching IDs update existing records; unmatched IDs are added. A backup is taken before applying the import. Dates are ISO `YYYY-MM-DD`; CSV tags use semicolons. CSV checklist, link, and dependency fields use JSON arrays. Specialized Things/Todoist/Reminders adapters are not included.
+JSON and CSV exports include every stack and card, including empty stacks, completed cards, and unstacked cards, regardless of the current view or filters. JSON also includes goals, templates, headings, and settings. CSV uses a `recordType` column (`stack` or `card`), preserves stack details and card relationships, and stores array fields (tags, headings, checklists, links, and dependencies) as JSON arrays inside quoted cells. Stack rows use `name`; card rows use `title`, `stackId`, and a readable `stack` name.
+
+Import a Deck JSON or CSV export, an array of card objects, or a legacy CSV with a `title` column and semicolon-separated tags. A preview shows the resulting card/stack count. Matching IDs update existing records; unmatched IDs are added. A backup is taken before applying the import. Dates are ISO `YYYY-MM-DD`. Specialized Things/Todoist/Reminders adapters are not included.
 
 ## Structure
 

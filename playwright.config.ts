@@ -1,6 +1,7 @@
 import { defineConfig } from '@playwright/test';
 export default defineConfig({
   testDir: './tests/e2e',
+  testIgnore: '**/portal/**',
   fullyParallel: true,
   use: {
     baseURL: 'http://127.0.0.1:1432',

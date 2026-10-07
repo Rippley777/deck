@@ -120,7 +120,7 @@ export function TaskView() {
     for (const t of tasks) {
       const group =
         view === 'today'
-          ? t.heading || data.headings[0]
+          ? t.heading || data.headings[0] || 'Cards'
           : view === 'upcoming'
             ? t.scheduled!
             : view === 'logbook'
@@ -162,7 +162,9 @@ export function TaskView() {
     <>
       {headingMenu.menu}
       <div className="workspace-scroll">
-        <div className={`page-wrap ${view === 'today' ? 'today-page' : ''}`}>
+        <div
+          className={`page-wrap ${view === 'today' && (data.tasks.length || data.stacks.length) ? 'today-page' : ''}`}
+        >
           <main className="task-main">
             <div className="page-eyebrow">
               {view === 'today' ? (
@@ -467,16 +469,26 @@ export function TaskView() {
                   {search
                     ? 'Nothing here just yet.'
                     : view === 'inbox'
-                      ? 'A little more headspace.'
-                      : 'Room for what’s next.'}
+                      ? 'Inbox zero, before you even started.'
+                      : view === 'today'
+                        ? 'Nothing on deck.'
+                        : view === 'logbook'
+                          ? 'No completed tasks yet.'
+                          : 'Nothing here yet.'}
                 </h2>
                 <p>
                   {search
                     ? 'Try another search or clear your filters.'
-                    : 'Capture a thought and give it a place to land.'}
+                    : view === 'today'
+                      ? 'Add a task or pull something into Today.'
+                      : view === 'inbox'
+                        ? 'Capture something when it comes to mind.'
+                        : view === 'logbook'
+                          ? 'Completed tasks will appear here.'
+                          : 'Add a task when you’re ready.'}
                 </p>
                 <button className="primary-button" onClick={() => setModal('quick')}>
-                  <Plus size={14} /> Add a card
+                  <Plus size={14} /> Add Task
                 </button>
               </div>
             )}
@@ -509,7 +521,7 @@ export function TaskView() {
               )}
             </div>
           </main>
-          {view === 'today' && <TodayAside />}
+          {view === 'today' && !!(data.tasks.length || data.stacks.length) && <TodayAside />}
         </div>
       </div>
       <Modal

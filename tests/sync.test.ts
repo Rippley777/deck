@@ -78,6 +78,32 @@ describe('three-way Deck synchronization', () => {
     expect(mergeDeck(b, l, r).conflicts).toEqual([]);
     expect(mergeDeck(b, l, r).data.tasks[0].title).toBe('Changed');
   });
+  it('merges independent checklist item edits by stable ID', () => {
+    const b = base();
+    b.tasks[0].checklist = [
+      { id: 'first', title: 'First', done: false },
+      { id: 'second', title: 'Second', done: false },
+    ];
+    const l = structuredClone(b),
+      r = structuredClone(b);
+    l.tasks[0].checklist[0].done = true;
+    r.tasks[0].checklist[1].done = true;
+    expect(mergeDeck(b, l, r).data.tasks[0].checklist.every((item) => item.done)).toBe(true);
+    expect(mergeDeck(b, l, r).conflicts).toEqual([]);
+  });
+  it('preserves concurrent tag and graph link additions without resurrecting removed references', () => {
+    const b = base();
+    b.tasks[0].tags = ['removed', 'kept'];
+    const l = structuredClone(b),
+      r = structuredClone(b);
+    l.tasks[0].tags = ['kept', 'local'];
+    r.tasks[0].tags = ['removed', 'kept', 'remote'];
+    l.tasks[0].links = ['local-link'];
+    r.tasks[0].links = ['remote-link'];
+    const result = mergeDeck(b, l, r).data.tasks[0];
+    expect(result.tags).toEqual(['kept', 'remote', 'local']);
+    expect(result.links).toEqual(['remote-link', 'local-link']);
+  });
   it('rejects malformed and duplicate entities at the API boundary', () => {
     const b = base();
     expect(deckSchema.safeParse(b).success).toBe(true);

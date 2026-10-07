@@ -1,9 +1,92 @@
 import { useEffect, useState } from 'react';
-import { authClient, api, signOut, useCloud } from '../../lib/cloud';
+import {
+  authClient,
+  api,
+  useCloud,
+  portalEnabled,
+  reviewSync,
+  keepLocalOnly,
+  switchLocalProfile,
+  openSignIn,
+  openSignOut,
+} from '../../lib/cloud';
 import { download, exportData } from '../../lib/transfer';
 import { useDeck } from '../../stores/deck';
+import { localProfiles } from '../../lib/profiles';
 
 export function Account() {
+  const user = useCloud((s) => s.user);
+  if (!user)
+    return (
+      <div className="account-panel">
+        <h4>Deck Account</h4>
+        <p>You’re currently using Deck locally. Your data is stored only on this device.</p>
+        <p>Signing in enables cloud backup and syncing across devices.</p>
+        {portalEnabled ? (
+          <div className="account-actions">
+            <button className="primary-button" onClick={() => openSignIn()}>
+              Sign In
+            </button>
+            <button className="secondary-button" onClick={() => openSignIn('signup')}>
+              Create Account
+            </button>
+          </div>
+        ) : (
+          <p>
+            Cloud sync is not configured for this build. Local features and backups are available.
+          </p>
+        )}
+        <LocalProfiles />
+      </div>
+    );
+  return <SignedInAccount />;
+}
+export function LocalProfiles() {
+  const [profiles, setProfiles] = useState(localProfiles);
+  const profile = localStorage.getItem('deck-active-profile') || '';
+  const [error, setError] = useState('');
+  useEffect(() => {
+    const update = () => setProfiles(localProfiles());
+    window.addEventListener('deck-profiles-changed', update);
+    return () => window.removeEventListener('deck-profiles-changed', update);
+  }, []);
+  return (
+    <div className="local-profiles">
+      <h4>Local profiles</h4>
+      <p>Each profile has its own Deck and backups. Switching keeps the current profile saved.</p>
+      {profiles.map((p) => (
+        <button
+          key={p.id}
+          disabled={p.id === profile}
+          onClick={async () => {
+            try {
+              await switchLocalProfile(p.id);
+            } catch (e) {
+              setError(String(e));
+            }
+          }}
+        >
+          {p.name}
+          {p.id === profile ? ' · Current' : ''}
+        </button>
+      ))}
+      <button
+        onClick={async () => {
+          try {
+            await switchLocalProfile(crypto.randomUUID());
+          } catch (e) {
+            setError(String(e));
+          }
+        }}
+      >
+        Create a separate local profile
+      </button>
+      {error && <p role="alert">{error}</p>}
+    </div>
+  );
+}
+
+function SignedInAccount() {
   const { user, status, lastSynced, error } = useCloud();
   const [section, setSection] = useState('Profile');
   const [name, setName] = useState(user?.name || '');
@@ -20,9 +103,17 @@ export function Account() {
   const [history, setHistory] = useState<
     { version: number; created_at: string; conflicts: unknown }[]
   >([]);
-  const [devices, setDevices] = useState<{ id: string; name: string; last_active_at: string }[]>(
-    [],
-  );
+  const [devices, setDevices] = useState<
+    {
+      id: string;
+      name: string;
+      platform?: string;
+      architecture?: string;
+      app_version?: string;
+      last_sync?: string;
+      last_active_at: string;
+    }[]
+  >([]);
   const [deviceName, setDeviceName] = useState('My desktop');
   const [deviceToken, setDeviceToken] = useState('');
   const [entra, setEntra] = useState(false);
@@ -85,6 +176,26 @@ export function Account() {
           </button>
         ))}
       </nav>
+      <p>
+        <strong>{user?.email}</strong> · {status}
+        {lastSynced && ` · Last successful sync ${new Date(lastSynced).toLocaleString()}`}
+      </p>
+      {error && (
+        <>
+          <p role="alert">{error}</p>
+          <button onClick={() => openSignIn()}>Sign in again</button>
+        </>
+      )}
+      {!useDeck.getState().data.local?.syncEnabled && (
+        <button
+          onClick={() => {
+            void reviewSync();
+            useDeck.getState().setModal(null);
+          }}
+        >
+          Set up sync
+        </button>
+      )}
       <h4>{section}</h4>
       {section === 'Profile' && (
         <form
@@ -218,7 +329,10 @@ export function Account() {
                 disabled={busy}
                 onClick={() =>
                   void run(async () => {
-                    if (s.id === current.data?.session.id) return signOut();
+                    if (s.id === current.data?.session.id) {
+                      openSignOut();
+                      return;
+                    }
                     const r = await authClient.revokeSession({ token: s.token });
                     if (r.error) return r;
                     const refreshed = await authClient.listSessions();
@@ -244,12 +358,16 @@ export function Account() {
           >
             Sign out everywhere
           </button>
-          <h4>Connected desktops</h4>
+          <h4>Devices</h4>
           {devices.map((d) => (
             <div className="account-session" key={d.id}>
               <span>
                 {d.name}
-                <small>Last active {new Date(d.last_active_at).toLocaleString()}</small>
+                <small>
+                  {d.platform} {d.architecture} {d.app_version && `· Deck ${d.app_version}`} · Last
+                  active {new Date(d.last_active_at).toLocaleString()}
+                  {d.last_sync && ` · Last sync ${new Date(d.last_sync).toLocaleString()}`}
+                </small>
               </span>
               <button
                 disabled={busy}
@@ -318,8 +436,8 @@ export function Account() {
                   void run(async () => {
                     const data = useDeck.getState().data;
                     await exportData(data, 'json');
-                    useDeck.getState().commit({ ...data, cloud: undefined });
-                    useCloud.setState({ firstSync: true });
+                    keepLocalOnly();
+                    await reviewSync();
                     useDeck.getState().setModal(null);
                   }, '')
                 }
@@ -345,10 +463,10 @@ export function Account() {
               Download edits recovered during sync
             </button>
           )}
-          {!useDeck.getState().data.cloud && (
+          {!useDeck.getState().data.local?.syncEnabled && (
             <button
               onClick={() => {
-                useCloud.setState({ firstSync: true, firstSyncDeferred: false });
+                void reviewSync();
                 useDeck.getState().setModal(null);
               }}
             >
@@ -454,7 +572,9 @@ export function Account() {
                   localStorage.removeItem('deck-offline-user');
                   location.assign('/app');
                 },
-                entra ? 'Deck account deleted.' : 'Check your email to confirm permanent account deletion.',
+                entra
+                  ? 'Deck account deleted.'
+                  : 'Check your email to confirm permanent account deletion.',
               )
             }
           >
@@ -464,7 +584,8 @@ export function Account() {
       )}
       {message && <p role="status">{message}</p>}
       <hr />
-      <button disabled={busy} onClick={() => void run(signOut, '')}>
+      <LocalProfiles />
+      <button disabled={busy} onClick={openSignOut}>
         Sign out of Deck
       </button>
     </div>

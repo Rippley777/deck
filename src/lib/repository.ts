@@ -16,11 +16,8 @@ export interface DeckRepository {
   backup(): Promise<void>;
   restore(name: string): Promise<DeckData>;
   location(): Promise<string>;
-}
-let idb: IDBDatabase;
-let accountScope = '';
-export function setRepositoryAccount(userId: string) {
-  accountScope = userId;
+  switchProfile(profile: string): Promise<DeckData | null>;
+  clear(): Promise<void>;
 }
 function request<T>(req: IDBRequest<T>): Promise<T> {
   return new Promise((resolve, reject) => {
@@ -28,14 +25,14 @@ function request<T>(req: IDBRequest<T>): Promise<T> {
     req.onerror = () => reject(req.error);
   });
 }
-async function openIDB() {
-  const req = indexedDB.open(accountScope ? `deck-account-${accountScope}` : 'deck-local', 1);
+async function openIDB(scope: string) {
+  const req = indexedDB.open(scope ? `deck-account-${scope}` : 'deck-local', 1);
   req.onupgradeneeded = () => {
     req.result.createObjectStore('files');
   };
-  idb = await request(req);
+  return request(req);
 }
-async function putMany(items: [string, unknown][], remove: string[] = []) {
+async function putMany(idb: IDBDatabase, items: [string, unknown][], remove: string[] = []) {
   await new Promise<void>((resolve, reject) => {
     const tx = idb.transaction('files', 'readwrite');
     const store = tx.objectStore('files');
@@ -46,31 +43,54 @@ async function putMany(items: [string, unknown][], remove: string[] = []) {
     tx.onabort = () => reject(tx.error || new Error('Storage transaction aborted'));
   });
 }
-async function readFile(key: string) {
+async function readFile(idb: IDBDatabase, key: string) {
   return request(idb.transaction('files', 'readonly').objectStore('files').get(key));
 }
 class BrowserRepository implements DeckRepository {
+  private idb!: IDBDatabase;
+  private scope: string;
+  constructor(scope = localStorage.getItem('deck-active-profile') || '') {
+    this.scope = scope;
+  }
   private db!: Database;
   private journalKey = `pending-${crypto.randomUUID()}`;
   private recoveredKeys: string[] = [];
   async load() {
-    await openIDB();
+    // Previous portal releases kept account Decks in their own IndexedDB database.
+    // Reopen that exact profile on upgrade; never move or reseed its contents.
+    if (localStorage.getItem('deck-active-profile') === null && indexedDB.databases) {
+      try {
+        const cached = JSON.parse(localStorage.getItem('deck-offline-user') || 'null');
+        const databases = await indexedDB.databases();
+        if (cached?.id && databases.some((db) => db.name === `deck-account-${cached.id}`)) {
+          this.scope = cached.id;
+          localStorage.setItem('deck-active-profile', this.scope);
+        }
+      } catch {
+        /* The default local database remains available. */
+      }
+    }
+    this.idb = await openIDB(this.scope);
     const SQL = await initSqlJs({ locateFile: () => wasmUrl });
-    const bytes = await readFile('deck.db');
+    const bytes = await readFile(this.idb, 'deck.db');
     this.db = bytes ? new SQL.Database(bytes) : new SQL.Database();
     this.db.run(
       'CREATE TABLE IF NOT EXISTS migrations (version INTEGER PRIMARY KEY); CREATE TABLE IF NOT EXISTS documents (collection TEXT NOT NULL, id TEXT NOT NULL, value TEXT NOT NULL, PRIMARY KEY(collection,id)); INSERT OR IGNORE INTO migrations VALUES (1);',
     );
     let data = this.decode();
-    if (accountScope) {
-      const store = idb.transaction('files', 'readonly').objectStore('files');
+    {
+      const store = this.idb.transaction('files', 'readonly').objectStore('files');
       const keys = await request(store.getAllKeys());
       this.recoveredKeys = keys.map(String).filter((key) => key.startsWith('pending-'));
       for (const key of this.recoveredKeys) {
-        const pending = (await readFile(key)) as DeckData;
-        if (!pending || (pending.cloud && pending.cloud.userId !== accountScope)) continue;
+        const pending = (await readFile(this.idb, key)) as DeckData;
+        if (
+          !pending ||
+          (pending.cloud && data?.cloud && pending.cloud.userId !== data.cloud.userId)
+        )
+          continue;
         const clean = (v: DeckData) => {
-          const { cloud: _cloud, cloudPristine: _pristine, ...content } = v;
+          const { cloud: _cloud, cloudPristine: _pristine, local: _local, ...content } = v;
           return content;
         };
         const current = data || emptyDeck(defaultSettings);
@@ -81,6 +101,7 @@ class BrowserRepository implements DeckRepository {
         );
         data = {
           ...merged.data,
+          local: current.local || pending.local,
           cloudPristine: current.cloudPristine && pending.cloudPristine,
           cloud: current.cloud
             ? {
@@ -115,14 +136,15 @@ class BrowserRepository implements DeckRepository {
       this.db.run('ROLLBACK');
       throw e;
     }
-    const { cloud, cloudPristine: _pristine, ...content } = data;
+    const { cloud, cloudPristine: _pristine, local: _local, ...content } = data;
     const synced = cloud && sameValue(content, cloud.base);
     await putMany(
+      this.idb,
       [
         ['deck.db', this.db.export()],
-        ...(accountScope && !synced ? [[this.journalKey, data] as [string, unknown]] : []),
+        ...(cloud && !synced ? [[this.journalKey, data] as [string, unknown]] : []),
       ],
-      accountScope && synced ? [this.journalKey, ...this.recoveredKeys] : [],
+      synced ? [this.journalKey, ...this.recoveredKeys] : [],
     );
     if (synced) this.recoveredKeys = [];
     const existing = await this.backups();
@@ -133,7 +155,7 @@ class BrowserRepository implements DeckRepository {
   }
   async backups() {
     const keys = await request(
-      idb.transaction('files', 'readonly').objectStore('files').getAllKeys(),
+      this.idb.transaction('files', 'readonly').objectStore('files').getAllKeys(),
     );
     return keys
       .map(String)
@@ -146,6 +168,7 @@ class BrowserRepository implements DeckRepository {
     const name = `deck-backup-${today()}.db`;
     const existing = await this.backups();
     await putMany(
+      this.idb,
       [[name, this.db.export()]],
       existing
         .filter((b) => b.name !== name)
@@ -154,7 +177,7 @@ class BrowserRepository implements DeckRepository {
     );
   }
   async restore(name: string) {
-    const bytes = await readFile(name);
+    const bytes = await readFile(this.idb, name);
     if (!bytes) throw new Error('Backup not found');
     const SQL = await initSqlJs({ locateFile: () => wasmUrl });
     const replacement = new SQL.Database(bytes);
@@ -166,7 +189,7 @@ class BrowserRepository implements DeckRepository {
       throw new Error('Invalid backup');
     }
     const data = JSON.parse(String(value)) as DeckData;
-    await putMany([
+    await putMany(this.idb, [
       ['deck.db', bytes],
       [`deck-backup-${today()}-before-restore.db`, this.db.export()],
     ]);
@@ -175,12 +198,35 @@ class BrowserRepository implements DeckRepository {
     return data;
   }
   async location() {
-    return `This browser · IndexedDB / ${accountScope ? `deck-account-${accountScope}` : 'deck-local'} / deck.db`;
+    return `This browser · IndexedDB / ${this.scope ? `deck-account-${this.scope}` : 'deck-local'} / deck.db`;
+  }
+  async switchProfile(profile: string) {
+    const replacement = new BrowserRepository(profile);
+    const data = await replacement.load();
+    this.db?.close();
+    this.idb?.close();
+    this.scope = replacement.scope;
+    this.db = replacement.db;
+    this.idb = replacement.idb;
+    this.journalKey = replacement.journalKey;
+    this.recoveredKeys = replacement.recoveredKeys;
+    localStorage.setItem('deck-active-profile', this.scope);
+    return data;
+  }
+  async clear() {
+    const keys = await request(this.idb.transaction('files').objectStore('files').getAllKeys());
+    await putMany(this.idb, [], keys.map(String));
+    this.db.run('DELETE FROM documents');
+    this.recoveredKeys = [];
   }
 }
 class NativeRepository implements DeckRepository {
   async load() {
-    const value = await invoke<string | null>('load_data');
+    const profile = localStorage.getItem('deck-active-profile') || '';
+    const value = await invoke<string | null>(
+      profile ? 'switch_profile' : 'load_data',
+      profile ? { profile } : {},
+    );
     return value ? JSON.parse(value) : null;
   }
   async save(data: DeckData) {
@@ -197,6 +243,13 @@ class NativeRepository implements DeckRepository {
   }
   async location() {
     return invoke<string>('database_location');
+  }
+  async switchProfile(profile: string) {
+    const value = await invoke<string | null>('switch_profile', { profile });
+    return value ? (JSON.parse(value) as DeckData) : null;
+  }
+  async clear() {
+    await invoke('clear_local_data');
   }
 }
 export const repository: DeckRepository = isTauri()

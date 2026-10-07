@@ -1,7 +1,7 @@
 import { isTauri } from '@tauri-apps/api/core';
+import { ProjectDiscovery } from './ProjectDiscovery';
 import { DesktopAccount } from '../account/DesktopAccount';
 import { Account } from '../account/Account';
-import { portalEnabled } from '../../lib/cloud';
 import { useEffect, useRef, useState } from 'react';
 import {
   Archive,
@@ -24,7 +24,7 @@ import { repository, type Backup } from '../../lib/repository';
 import { exportData, importData } from '../../lib/transfer';
 import type { DeckData, Settings as SettingsType } from '../../types';
 const tabs = [
-  ...(portalEnabled || isTauri() ? [{ name: 'Account', icon: ShieldCheck }] : []),
+  { name: 'Account', icon: ShieldCheck },
   { name: 'General', icon: Settings2 },
   { name: 'Appearance', icon: Palette },
   { name: 'Keyboard', icon: Keyboard },
@@ -34,13 +34,15 @@ const tabs = [
 ];
 export function Settings() {
   const { data, modal, setModal, commit, notify, error } = useDeck();
-  const [tab, setTab] = useState('General');
+  const tab = useDeck((s) => s.settingsTab);
+  const setTab = (settingsTab: string) => useDeck.setState({ settingsTab });
   const [backups, setBackups] = useState<Backup[]>([]);
   const [location, setLocation] = useState('');
   const [importError, setImportError] = useState('');
   const [importPreview, setImportPreview] = useState<DeckData | null>(null);
   const [restore, setRestore] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [exporting, setExporting] = useState(false);
   const [goalTitle, setGoalTitle] = useState('');
   const file = useRef<HTMLInputElement>(null);
   const settings = data.settings;
@@ -203,16 +205,25 @@ export function Settings() {
             <>
               <p className="small-muted">Your data belongs to you. Take it wherever you go.</p>
               <h4>Export your workspace</h4>
+              <p className="small-muted">
+                Export all {data.stacks.length} stacks and {data.tasks.length} cards, including
+                completed cards and empty stacks. JSON also includes goals, templates, and settings.
+              </p>
               <div className="export-options">
                 {(['json', 'csv', 'md'] as const).map((format) => (
                   <button
                     className="secondary-button"
                     key={format}
+                    disabled={exporting}
                     onClick={async () => {
+                      setImportError('');
+                      setExporting(true);
                       try {
                         if (await exportData(data, format)) notify('Your export is ready.');
                       } catch (error) {
-                        setImportError(String(error));
+                        setImportError(`Could not export your workspace: ${String(error)}`);
+                      } finally {
+                        setExporting(false);
                       }
                     }}
                   >
@@ -223,8 +234,8 @@ export function Settings() {
               </div>
               <h4>Bring your cards along</h4>
               <p className="small-muted">
-                Import a Deck JSON export or a CSV with a title column. Matching IDs update existing
-                cards. Other cards are kept.
+                Import a Deck JSON or CSV export, or a CSV with a title column. Matching IDs update
+                existing stacks and cards. Other stacks and cards are kept.
               </p>
               <input
                 ref={file}
@@ -360,6 +371,7 @@ export function Settings() {
           )}
           {tab === 'Advanced' && (
             <>
+              <ProjectDiscovery />
               <p className="small-muted">Local by design. No account required.</p>
               <h4>Database location</h4>
               <code className="database-location">{location}</code>

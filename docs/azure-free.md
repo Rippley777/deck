@@ -15,8 +15,14 @@ are usage limits, not a guarantee that every possible usage remains free. Check
 the subscription's billing and usage periodically. Free services have no SLA.
 
 Entra hosts email/password registration, verification, and password recovery;
-Deck does not require SMTP in this deployment. Google OAuth is not configured.
-Email and password changes happen through Microsoft's hosted identity flow.
+Deck does not require SMTP for the existing Entra flow. Optional Deck-managed
+email/password is also supported on Azure SQL when SMTP or Azure Communication
+Services and MAIL_FROM are configured. Google OAuth is supported on Azure SQL
+when GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET are configured; register the
+public origin plus /api/auth/callback/google with Google. Google is not currently
+configured in this deployment.
+Existing Entra users manage email and passwords through Microsoft's hosted
+identity flow. New Deck-managed credentials use the built-in account forms.
 Deck's Security screen deletes the Deck account and synchronized SQL data after
 a recent browser sign-in; it does not remove the separate Entra identity.
 

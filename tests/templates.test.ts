@@ -12,14 +12,15 @@ import {
 } from '../src/lib/templates';
 import { initialFilters, projectGraph } from '../src/features/graph/model';
 import { importData } from '../src/lib/transfer';
-const workspace = () => withTemplates(seedData());
+const workspace = () => withTemplates({ ...seedData(), templates: builtinTemplates() });
 const preset = (name: string) => builtinTemplates().find((t) => t.name === name)!;
 const options = (template: ReturnType<typeof preset>) => ({
   selectedIds: template.items.filter((i) => i.selected).map((i) => i.id),
   values: { project_name: 'Repo Reaper' },
 });
 describe('template generation', () => {
-  it('migrates old workspaces once and keeps an intentionally empty library', () => {
+  it('keeps new and legacy empty libraries empty and preserves explicitly installed templates', () => {
+    expect(withTemplates(seedData()).templates).toEqual([]);
     expect(workspace().templates).toHaveLength(10);
     expect(withTemplates({ ...seedData(), templates: [] }).templates).toEqual([]);
     builtinTemplates().forEach(validateTemplate);

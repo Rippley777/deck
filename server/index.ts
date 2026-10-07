@@ -1,15 +1,26 @@
+import { deviceRoutes } from './devices';
 import express from 'express';
 import { randomBytes, createHash } from 'node:crypto';
 import helmet from 'helmet';
 import { rateLimit } from 'express-rate-limit';
 import { fromNodeHeaders, toNodeHandler } from 'better-auth/node';
-import { auth, pool, origin } from './auth';
+import { auth, pool, origin, emailEnabled, entraEnabled } from './auth';
 import { syncSchema } from '../shared/validation';
 import { emptyDeck, mergeDeck } from '../shared/sync';
 import { defaultSettings, type DeckData } from '../src/types';
 import { resolve } from 'node:path';
 
 const app = express();
+const devices = deviceRoutes(
+  (sql, values) =>
+    pool.query(
+      sql.replace(/@p(\d+)/g, (_, index) => '$' + index),
+      values,
+    ),
+  false,
+  origin,
+  process.env.BETTER_AUTH_SECRET!,
+);
 app.disable('x-powered-by');
 if (process.env.TRUST_PROXY === '1') app.set('trust proxy', 1);
 app.get('/healthz', async (_req, res) => {
@@ -31,7 +42,11 @@ app.use(
   }),
 );
 app.get('/api/v1/config', (_req, res) =>
-  res.json({ google: !!(process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET) }),
+  res.json({
+    google: !!(process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET),
+    entra: entraEnabled,
+    email: emailEnabled,
+  }),
 );
 app.use('/api/auth', (req, _res, next) => {
   req.headers['x-deck-client-ip'] = req.ip || req.socket.remoteAddress || 'unknown';
@@ -47,7 +62,12 @@ app.use('/api/v1', (req, res, next) => {
   if (
     !['GET', 'HEAD', 'OPTIONS'].includes(req.method) &&
     req.headers.origin !== origin &&
-    !(req.headers.authorization?.startsWith('Bearer ') && !req.headers.origin)
+    !(req.headers.authorization?.startsWith('Bearer ') && !req.headers.origin) &&
+    !(
+      req.headers.authorization?.startsWith('Pairing ') &&
+      !req.headers.origin &&
+      ['/devices/pair/start', '/devices/pair/poll'].includes(req.path)
+    )
   ) {
     res.status(403).json({ error: 'Untrusted origin' });
     return;
@@ -55,6 +75,7 @@ app.use('/api/v1', (req, res, next) => {
   next();
 });
 app.use(express.json({ limit: '12mb' }));
+app.use('/api/v1', devices.publicRoutes);
 app.use('/api/v1', async (req, res, next) => {
   if (req.headers.authorization?.startsWith('Bearer ') && !req.headers.origin) {
     const hash = createHash('sha256').update(req.headers.authorization.slice(7)).digest('hex');
@@ -82,6 +103,17 @@ app.use('/api/v1', async (req, res, next) => {
   res.locals.session = session;
   next();
 });
+app.use('/api/v1', (req, res, next) => {
+  const expectedAccount = req.headers['x-deck-account'];
+  if (expectedAccount && expectedAccount !== res.locals.userId) {
+    res.status(409).json({
+      error: 'The signed-in account changed. Reopen Account settings before syncing this Deck.',
+    });
+    return;
+  }
+  next();
+});
+app.use('/api/v1', devices.privateRoutes);
 app.get('/api/v1/me', async (_req, res) => {
   const user = (
     await pool.query('SELECT id,name,email FROM "user" WHERE id=$1', [res.locals.userId])
@@ -92,7 +124,7 @@ app.get('/api/v1/devices', async (_req, res) => {
   res.json(
     (
       await pool.query(
-        'SELECT id,name,last_active_at,expires_at FROM deck_devices WHERE user_id=$1 ORDER BY last_active_at DESC',
+        'SELECT id,name,platform,architecture,app_version,last_sync,last_active_at,expires_at FROM deck_devices WHERE user_id=$1 ORDER BY last_active_at DESC',
         [res.locals.userId],
       )
     ).rows,
@@ -164,7 +196,15 @@ app.post('/api/v1/sync', async (req, res) => {
     ).rows[0];
     const version = row?.version || 0;
     const current: DeckData = row?.data || emptyDeck(defaultSettings);
-    const { baseVersion, data } = parsed.data;
+    const { baseVersion, data, mode } = parsed.data;
+    if (mode === 'replace' && baseVersion !== version) {
+      await client.query('ROLLBACK');
+      res.status(409).json({
+        error:
+          'Cloud changed while you were reviewing sync. Check it again before replacing either Deck.',
+      });
+      return;
+    }
     let merged = { data, conflicts: [] as ReturnType<typeof mergeDeck>['conflicts'] };
     if (baseVersion !== version) {
       const base =
@@ -178,11 +218,9 @@ app.post('/api/v1/sync', async (req, res) => {
             ).rows[0]?.data;
       if (!base || baseVersion > version) {
         await client.query('ROLLBACK');
-        res
-          .status(409)
-          .json({
-            error: 'Sync history expired. Export local data and reconnect to merge safely.',
-          });
+        res.status(409).json({
+          error: 'Sync history expired. Export local data and reconnect to merge safely.',
+        });
         return;
       }
       merged = mergeDeck(base, data, current);

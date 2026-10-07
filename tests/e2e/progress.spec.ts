@@ -1,4 +1,4 @@
-import { test, expect, type Page } from '@playwright/test';
+import { test, expect, type Page } from './fixtures';
 
 const headerRing = (page: Page) => page.locator('.deck-progress-summary .deck-progress');
 async function importStack(page: Page, total: number, completed = 3) {
@@ -27,13 +27,11 @@ async function importStack(page: Page, total: number, completed = 3) {
       blockedBy: i === completed ? ['auth'] : [],
     })),
   };
-  await page
-    .locator('input[type=file]')
-    .setInputFiles({
-      name: 'progress.json',
-      mimeType: 'application/json',
-      buffer: Buffer.from(JSON.stringify(workspace)),
-    });
+  await page.locator('input[type=file]').setInputFiles({
+    name: 'progress.json',
+    mimeType: 'application/json',
+    buffer: Buffer.from(JSON.stringify(workspace)),
+  });
   await page.getByRole('button', { name: 'Import workspace', exact: true }).click();
   await expect(page.getByRole('status')).toContainText('Import complete');
   await page.getByRole('button', { name: 'Close', exact: true }).click();

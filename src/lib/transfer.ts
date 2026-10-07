@@ -15,20 +15,62 @@ export async function download(name: string, content: string, type = 'text/plain
   setTimeout(() => URL.revokeObjectURL(url), 1000);
   return true;
 }
-export function exportData(data: DeckData, format: 'json' | 'csv' | 'md') {
+const csvFields = [
+  'recordType',
+  'id',
+  'title',
+  'name',
+  'stackId',
+  'stack',
+  'kind',
+  'notes',
+  'icon',
+  'color',
+  'headings',
+  'heading',
+  'tags',
+  'scheduled',
+  'deadline',
+  'time',
+  'destination',
+  'priority',
+  'recurrence',
+  'completedAt',
+  'createdAt',
+  'updatedAt',
+  'checklist',
+  'links',
+  'blockedBy',
+  'parentId',
+  'effort',
+  'order',
+];
+export function serializeExport(data: DeckData, format: 'json' | 'csv' | 'md'): string {
   let content = '';
   if (format === 'json') content = JSON.stringify(data, null, 2);
-  if (format === 'csv')
-    content = Papa.unparse(
-      data.tasks.map((t) => ({
+  if (format === 'csv') {
+    const rows: Record<string, string | number | null | undefined>[] = [
+      ...data.stacks.map((s) => ({
+        ...s,
+        recordType: 'stack',
+        headings: JSON.stringify(s.headings),
+        links: JSON.stringify(s.links),
+      })),
+      ...data.tasks.map((t) => ({
         ...t,
+        recordType: 'card',
         stack: data.stacks.find((s) => s.id === t.stackId)?.name || '',
-        tags: t.tags.join(';'),
+        tags: JSON.stringify(t.tags),
         checklist: JSON.stringify(t.checklist),
         links: JSON.stringify(t.links),
         blockedBy: JSON.stringify(t.blockedBy),
       })),
+    ];
+    content = Papa.unparse(
+      [csvFields, ...rows.map((row) => csvFields.map((field) => row[field] ?? ''))],
+      { header: false },
     );
+  }
   if (format === 'md')
     content =
       `# Deck\n\nExported ${today()}\n\n` +
@@ -55,14 +97,33 @@ export function exportData(data: DeckData, format: 'json' | 'csv' | 'md') {
               .join('\n'),
         )
         .join('\n\n');
+  return content;
+}
+export function exportData(data: DeckData, format: 'json' | 'csv' | 'md') {
   return download(
     `deck-${today()}.${format}`,
-    content,
+    serializeExport(data, format),
     format === 'json' ? 'application/json' : format === 'csv' ? 'text/csv' : 'text/markdown',
   );
 }
 const strings = (v: unknown) =>
   Array.isArray(v) ? v.filter((s): s is string => typeof s === 'string') : [];
+function normalizeStack(raw: unknown): Stack {
+  if (!raw || typeof raw !== 'object') throw new Error('Each stack must be an object.');
+  const s = raw as Record<string, unknown>;
+  if (typeof s.id !== 'string' || !s.id.trim() || typeof s.name !== 'string' || !s.name.trim())
+    throw new Error('Every stack needs an ID and name.');
+  return {
+    id: s.id,
+    name: s.name,
+    icon: typeof s.icon === 'string' ? s.icon : '◈',
+    color: typeof s.color === 'string' && /^#[\da-f]{6}$/i.test(s.color) ? s.color : '#b5a0d5',
+    notes: typeof s.notes === 'string' ? s.notes : '',
+    deadline: typeof s.deadline === 'string' && s.deadline ? s.deadline : null,
+    headings: strings(s.headings),
+    links: strings(s.links),
+  };
+}
 function normalizeTask(raw: unknown): Task {
   if (!raw || typeof raw !== 'object') throw new Error('Each card must be an object.');
   const r = raw as Record<string, unknown>;
@@ -72,7 +133,7 @@ function normalizeTask(raw: unknown): Task {
       ? v
       : null;
   return makeTask(r.title, {
-    ...(r.kind === 'milestone' ? { kind: 'milestone' } : {}),
+    ...(r.kind === 'task' || r.kind === 'milestone' ? { kind: r.kind } : {}),
     id: typeof r.id === 'string' ? r.id : crypto.randomUUID(),
     notes: typeof r.notes === 'string' ? r.notes : '',
     stackId: typeof r.stackId === 'string' && r.stackId ? r.stackId : null,
@@ -112,7 +173,7 @@ function normalizeTask(raw: unknown): Task {
       : [],
     links: strings(r.links),
     blockedBy: strings(r.blockedBy),
-    parentId: typeof r.parentId === 'string' ? r.parentId : null,
+    parentId: typeof r.parentId === 'string' && r.parentId ? r.parentId : null,
     effort: Number(r.effort) > 0 ? Number(r.effort) : 25,
     order: Number.isFinite(Number(r.order)) ? Number(r.order) : Date.now(),
   });
@@ -129,22 +190,7 @@ export function importData(content: string, format: 'json' | 'csv', current: Dec
     if (!Array.isArray(records)) throw new Error('Expected a Deck export or an array of cards.');
     if (parsed.version && parsed.version !== 1) throw new Error('This export uses a newer format.');
     tasks = records.map(normalizeTask);
-    if (Array.isArray(parsed.stacks))
-      stacks = parsed.stacks.map((s: Record<string, unknown>) => {
-        if (typeof s.id !== 'string' || typeof s.name !== 'string')
-          throw new Error('Invalid stack in import.');
-        return {
-          id: s.id,
-          name: s.name,
-          icon: typeof s.icon === 'string' ? s.icon : '◈',
-          color:
-            typeof s.color === 'string' && /^#[\da-f]{6}$/i.test(s.color) ? s.color : '#b5a0d5',
-          notes: typeof s.notes === 'string' ? s.notes : '',
-          deadline: typeof s.deadline === 'string' ? s.deadline : null,
-          headings: strings(s.headings),
-          links: strings(s.links),
-        };
-      });
+    if (Array.isArray(parsed.stacks)) stacks = parsed.stacks.map(normalizeStack);
     if (Array.isArray(parsed.goals))
       goals = parsed.goals
         .filter((g: Goal) => typeof g.id === 'string' && typeof g.title === 'string')
@@ -159,13 +205,41 @@ export function importData(content: string, format: 'json' | 'csv', current: Dec
       header: true,
       skipEmptyLines: true,
     });
-    if (!parsed.meta.fields?.includes('title')) throw new Error('CSV needs a “title” column.');
+    const hasRecordTypes = parsed.meta.fields?.includes('recordType');
+    if (!hasRecordTypes && !parsed.meta.fields?.includes('title'))
+      throw new Error('CSV needs a “title” column.');
     const errors = parsed.errors.filter((e) => e.code !== 'UndetectableDelimiter');
     if (errors.length) throw new Error(errors[0].message);
-    tasks = parsed.data.map((row) => {
+    const arrayField = (row: Record<string, string>, field: string, index: number): unknown[] => {
+      if (!row[field]) return [];
+      try {
+        const value: unknown = JSON.parse(row[field]);
+        if (Array.isArray(value)) return value;
+      } catch {
+        // Report the column and row instead of a raw JSON parsing error.
+      }
+      throw new Error(`CSV row ${index + 2}: “${field}” must contain a JSON array.`);
+    };
+    if (hasRecordTypes) {
+      parsed.data.forEach((row, index) => {
+        if (row.recordType === 'stack')
+          stacks.push(
+            normalizeStack({
+              ...row,
+              headings: arrayField(row, 'headings', index),
+              links: arrayField(row, 'links', index),
+            }),
+          );
+        else if (row.recordType !== 'card')
+          throw new Error(`CSV row ${index + 2}: “recordType” must be “stack” or “card”.`);
+      });
+    }
+    tasks = parsed.data.flatMap((row, index) => {
+      if (hasRecordTypes && row.recordType === 'stack') return [];
       let stackId = row.stackId || null;
-      if (row.stack && !current.stacks.some((s) => s.id === stackId)) {
-        const existing = [...current.stacks, ...stacks].find((s) => s.name === row.stack);
+      const availableStacks = [...stacks, ...current.stacks];
+      if (row.stack && !availableStacks.some((s) => s.id === stackId)) {
+        const existing = availableStacks.find((s) => s.name === row.stack);
         if (existing) stackId = existing.id;
         else {
           stackId = stackId || crypto.randomUUID();
@@ -181,14 +255,20 @@ export function importData(content: string, format: 'json' | 'csv', current: Dec
           });
         }
       }
-      return normalizeTask({
-        ...row,
-        stackId,
-        tags: row.tags ? row.tags.split(';') : [],
-        checklist: row.checklist ? JSON.parse(row.checklist) : [],
-        links: row.links ? JSON.parse(row.links) : [],
-        blockedBy: row.blockedBy ? JSON.parse(row.blockedBy) : [],
-      });
+      return [
+        normalizeTask({
+          ...row,
+          stackId,
+          tags: hasRecordTypes
+            ? arrayField(row, 'tags', index)
+            : row.tags
+              ? row.tags.split(';')
+              : [],
+          checklist: arrayField(row, 'checklist', index),
+          links: arrayField(row, 'links', index),
+          blockedBy: arrayField(row, 'blockedBy', index),
+        }),
+      ];
     });
   }
   const merge = <T extends { id: string }>(a: T[], b: T[]) =>

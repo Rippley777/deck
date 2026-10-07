@@ -1,33 +1,67 @@
 import { invoke, isTauri } from '@tauri-apps/api/core';
 import { useEffect, useState, type ReactNode } from 'react';
-import { ArrowRight, Check, Cloud, Layers3, ShieldCheck } from 'lucide-react';
-import { authClient, portalEnabled, useCloud, startSync, synchronize } from '../../lib/cloud';
-import { exportData, importData } from '../../lib/transfer';
-import { api } from '../../lib/cloud';
-import { setRepositoryAccount } from '../../lib/repository';
+import { ArrowRight, ShieldCheck } from 'lucide-react';
+import {
+  authClient,
+  portalEnabled,
+  useCloud,
+  startSync,
+  completeSetup,
+  keepLocalOnly,
+  switchLocalProfile,
+  signOut,
+  reviewSync,
+  api,
+} from '../../lib/cloud';
+import { deckHasContent } from '../../lib/sync-policy';
 import { useDeck } from '../../stores/deck';
 import { DeckMark, Modal } from '../../components/ui';
 import './account.css';
 
 export function Portal({ children }: { children: ReactNode }) {
-  if (isTauri())
-    return (
-      <>
-        {children}
-        <DesktopSync />
-      </>
-    );
-  if (!portalEnabled) return children;
-  return <AccountGate>{children}</AccountGate>;
+  const { authMode } = useCloud();
+  const reset =
+    location.pathname === '/reset-password' && new URLSearchParams(location.search).has('token');
+  return (
+    <>
+      {children}
+      {isTauri() ? <DesktopSession /> : portalEnabled ? <BrowserSession /> : null}
+      <SyncLifecycle />
+      <SignOutDialog />
+      {portalEnabled && <DesktopApproval />}
+      <Modal
+        open={!!authMode || reset}
+        onClose={() => {
+          useCloud.setState({ authMode: null });
+          if (reset) {
+            history.replaceState({}, '', '/app');
+            location.reload();
+          }
+        }}
+        title={reset ? 'Reset your password' : 'Sign in to sync'}
+        className="account-auth-modal"
+      >
+        {(authMode || reset) && (
+          <AuthScreen
+            initial={reset ? 'reset' : authMode || 'signin'}
+            onClose={() => {
+              useCloud.setState({ authMode: null });
+              if (reset) {
+                history.replaceState({}, '', '/app');
+                location.reload();
+              }
+            }}
+          />
+        )}
+      </Modal>
+    </>
+  );
 }
-let mountedAccount: string | null = null;
-function AccountGate({ children }: { children: ReactNode }) {
+function BrowserSession() {
   const session = authClient.useSession();
-  const [offline, setOffline] = useState(!navigator.onLine);
-  const [bound, setBound] = useState(false);
-  const user = useCloud((s) => s.user);
+  const [online, setOnline] = useState(navigator.onLine);
   useEffect(() => {
-    const update = () => setOffline(!navigator.onLine);
+    const update = () => setOnline(navigator.onLine);
     window.addEventListener('online', update);
     window.addEventListener('offline', update);
     return () => {
@@ -37,158 +71,368 @@ function AccountGate({ children }: { children: ReactNode }) {
   }, []);
   useEffect(() => {
     let next = session.data?.user;
-    if (offline && !next) {
+    if (!next && (!online || session.error)) {
       try {
         next = JSON.parse(localStorage.getItem('deck-offline-user') || 'null');
       } catch {
-        /* no offline session */
+        /* no cached identity */
       }
     }
-    if (next) {
-      if (mountedAccount && mountedAccount !== next.id) {
-        location.reload();
-        return;
-      }
-      mountedAccount = next.id;
-      setRepositoryAccount(next.id);
-      useCloud.setState({ user: next });
-      localStorage.setItem(
-        'deck-offline-user',
-        JSON.stringify({ id: next.id, name: next.name, email: next.email }),
-      );
-      setBound(true);
-    } else if (!session.isPending && !offline) {
-      setBound(false);
-      useCloud.setState({ user: null });
+    if (next?.id) {
+      const { id, name, email } = next;
+      useCloud.setState({ user: { id, name, email }, authMode: null });
+      localStorage.setItem('deck-offline-user', JSON.stringify({ id, name, email }));
+    } else if (!session.isPending && online && !session.error) {
+      useCloud.setState({ user: null, status: 'Local only', setup: null, firstSync: false });
+      localStorage.removeItem('deck-offline-user');
     }
-  }, [session.data, session.isPending, offline, user?.id]);
-  if (new URLSearchParams(location.search).has('token') && location.pathname === '/reset-password')
-    return <AuthScreen initial="reset" />;
-  if (!bound) {
-    if (session.isPending && !offline)
-      return (
-        <div className="loading-screen">
-          <DeckMark size={45} />
-          <p>Opening your Deck…</p>
-        </div>
-      );
-    if (session.error && !offline)
-      return (
-        <div className="loading-screen">
-          <DeckMark size={45} />
-          <h1>We couldn’t reach your account.</h1>
-          <p>Your local Deck is still saved on this device.</p>
-          <button className="primary-button" onClick={() => location.reload()}>
-            Try again
-          </button>
-        </div>
-      );
-    return <AuthScreen />;
-  }
-  return (
-    <>
-      {children}
-      <SyncLifecycle />
-    </>
-  );
+  }, [session.data, session.isPending, session.error, online]);
+  useEffect(() => {
+    const refresh = (event: StorageEvent) => {
+      if (event.key === 'deck-active-profile') location.reload();
+      if (event.key === 'deck-offline-user') {
+        try {
+          if (!event.newValue || JSON.parse(event.newValue).id !== useCloud.getState().user?.id)
+            location.reload();
+        } catch {
+          location.reload();
+        }
+      }
+    };
+    window.addEventListener('storage', refresh);
+    return () => window.removeEventListener('storage', refresh);
+  }, []);
+  return null;
+}
+function DesktopSession() {
+  const ready = useDeck((s) => s.ready);
+  useEffect(() => {
+    if (!ready) return;
+    try {
+      const cached = JSON.parse(localStorage.getItem('deck-native-user') || 'null');
+      if (cached?.id) useCloud.setState({ user: cached });
+    } catch {
+      /* no cached identity */
+    }
+    const connect = () =>
+      void invoke<{ id: string; name: string; email: string }>('cloud_request', {
+        path: 'me',
+        body: null,
+      })
+        .then((next) => {
+          localStorage.setItem('deck-native-user', JSON.stringify(next));
+          useCloud.setState({ user: next });
+        })
+        .catch(() => {});
+    connect();
+    window.addEventListener('online', connect);
+    return () => window.removeEventListener('online', connect);
+  }, [ready]);
+  return null;
 }
 function SyncLifecycle() {
   const ready = useDeck((s) => s.ready);
-  const first = useCloud((s) => s.firstSync);
-  const error = useCloud((s) => s.error);
+  const data = useDeck((s) => s.data);
+  const { user, firstSync, setup, error } = useCloud();
   const [busy, setBusy] = useState(false);
-  const [cloudCount, setCloudCount] = useState<number | null>(null);
-  const [startWith, setStartWith] = useState('today');
-  const localCount = useDeck((s) => s.data.tasks.length);
   useEffect(() => {
-    if (first)
-      api<{ data: { tasks: unknown[] } }>('sync')
-        .then((r) => setCloudCount(r.data.tasks.length))
-        .catch(() => {});
-  }, [first]);
-  useEffect(() => {
-    if (ready) return startSync();
-  }, [ready]);
+    if (ready && user && location.pathname !== '/desktop-connect') {
+      useCloud.setState({ lastSynced: useDeck.getState().data.local?.lastSynced || null });
+      return startSync();
+    }
+  }, [ready, user?.id]);
+  const scenario = setup?.scenario;
+  const act = async (action: () => Promise<unknown>) => {
+    setBusy(true);
+    try {
+      await action();
+    } catch (e) {
+      useCloud.setState({ error: String(e), status: 'Sync issue' });
+    } finally {
+      setBusy(false);
+    }
+  };
+  const title =
+    scenario === 'upload'
+      ? 'Back up this Deck?'
+      : scenario === 'restore'
+        ? 'Restore your Deck'
+        : scenario === 'account-switch'
+          ? 'This Deck belongs to another account'
+          : 'Both this device and your account contain Deck data.';
   return (
-    <Modal
-      open={first}
-      onClose={() =>
-        useCloud.setState({ firstSync: false, firstSyncDeferred: true, status: 'Changes pending' })
-      }
-      title="Your Deck, anywhere."
-      description="Connect this device to your private Deck. Independent changes will merge; overlapping versions stay recoverable."
-      className="first-sync"
-    >
-      <div className="onboarding-icons">
-        <Layers3 />
-        <Cloud />
-        <ShieldCheck />
-      </div>
-      <p>
-        {localCount} cards on this device ·{' '}
-        {cloudCount === null ? 'Checking cloud…' : `${cloudCount} cards in the cloud`}
-      </p>
-      <p>
-        Your local cards and cloud cards will be combined. No Deck is replaced wholesale. You can
-        export your local data from Settings before continuing.
-      </p>
-      <p>
-        New here? Start with a Stack, or choose a starter from the template library once you’re in.
-      </p>
-      <div className="first-sync-tools">
-        {cloudCount === 0 && localCount === 0 && (
-          <label>
-            Make it yours
-            <select value={startWith} onChange={(e) => setStartWith(e.target.value)}>
-              <option value="today">Start with Today</option>
-              <option value="stack">Create my first Stack</option>
-              <option value="templates">Choose a starter template</option>
-            </select>
-          </label>
-        )}
-        <button onClick={() => void exportData(useDeck.getState().data, 'json')}>
-          Export local Deck
-        </button>
-        <label>
-          Import a Deck archive
-          <input
-            type="file"
-            accept=".json"
-            onChange={async (e) => {
-              const file = e.target.files?.[0];
-              if (!file) return;
-              try {
-                const imported = importData(await file.text(), 'json', useDeck.getState().data);
-                useDeck.getState().commit({ ...imported, cloud: undefined });
-              } catch (e) {
-                useCloud.setState({ error: String(e) });
-              }
-            }}
-          />
-        </label>
-      </div>
+    <Modal open={firstSync} onClose={keepLocalOnly} title={title} className="first-sync">
+      {setup && (
+        <>
+          <p>
+            {data.tasks.length} tasks · {data.stacks.length} Stacks · {data.templates?.length || 0}{' '}
+            templates on this device
+          </p>
+          {scenario === 'upload' && (
+            <p>Sync this Deck to back it up and make it available on your other devices.</p>
+          )}
+          {scenario === 'restore' && (
+            <p>
+              Cloud Deck found: {setup.remote.data.tasks.length} tasks ·{' '}
+              {setup.remote.data.stacks.length} Stacks.
+              {setup.remote.updated_at && (
+                <> Last synced: {new Date(setup.remote.updated_at).toLocaleString()}.</>
+              )}{' '}
+              Restore it to this device and keep working offline.
+            </p>
+          )}
+          {scenario === 'merge' && (
+            <p>
+              Merge unique items by their IDs. Overlapping edits remain recoverable in Account →
+              Sync history.
+            </p>
+          )}
+          {scenario === 'account-switch' && (
+            <p>
+              Your current Deck stays in its own local profile. It cannot sync to {user?.email}.
+              Switch to a separate profile to restore or start this account’s Deck.
+            </p>
+          )}
+          <div className="account-actions">
+            {scenario === 'account-switch' ? (
+              <button
+                className="primary-button"
+                disabled={busy}
+                onClick={() => void act(() => switchLocalProfile(user!.id))}
+              >
+                Switch to this account’s Deck
+              </button>
+            ) : (
+              <button
+                className="primary-button"
+                disabled={busy}
+                onClick={() =>
+                  void act(() => completeSetup(scenario === 'restore' ? 'cloud' : 'merge'))
+                }
+              >
+                {busy
+                  ? 'Connecting…'
+                  : scenario === 'upload'
+                    ? 'Sync This Deck'
+                    : scenario === 'restore'
+                      ? 'Restore and Sync'
+                      : 'Merge Decks'}
+              </button>
+            )}
+            <button className="secondary-button" disabled={busy} onClick={keepLocalOnly}>
+              Keep Local Only
+            </button>
+          </div>
+          {scenario === 'merge' && (
+            <div className="sync-alternatives">
+              <p>
+                Use Cloud Deck replaces the visible local Deck. A local backup and recovery copy
+                preserve this device’s current content.
+              </p>
+              <button
+                disabled={busy}
+                onClick={() => {
+                  if (
+                    confirm(
+                      'Replace the visible local Deck with your cloud Deck? Your current content is retained in a local backup and sync recovery.',
+                    )
+                  )
+                    void act(() => completeSetup('cloud'));
+                }}
+              >
+                Use Cloud Deck
+              </button>
+              <p>
+                Keep This Device’s Deck replaces the cloud Deck with this device’s content. Other
+                devices will receive that change. The previous cloud revision stays in sync history.
+              </p>
+              <button
+                disabled={busy}
+                onClick={() => {
+                  if (
+                    confirm(
+                      'Replace your cloud Deck with this device’s Deck? Other devices will receive that change.',
+                    )
+                  )
+                    void act(() => completeSetup('device'));
+                }}
+              >
+                Keep This Device’s Deck
+              </button>
+            </div>
+          )}
+        </>
+      )}
       {error && <p role="alert">{error}</p>}
-      <button
-        className="primary-button"
-        disabled={busy}
-        onClick={async () => {
-          setBusy(true);
-          await synchronize(true);
-          if (!useCloud.getState().firstSync) {
-            if (startWith === 'stack') useDeck.getState().setModal('stack');
-            if (startWith === 'templates') useDeck.getState().openTemplates({ library: true });
-          }
-          setBusy(false);
-        }}
-      >
-        {busy ? 'Connecting…' : 'Connect & merge safely'}
-        <ArrowRight size={16} />
-      </button>
+      {error && (
+        <button disabled={busy} onClick={() => void act(reviewSync)}>
+          Check cloud again
+        </button>
+      )}
     </Modal>
   );
 }
-function AuthScreen({ initial = 'signin' }: { initial?: string }) {
+function DesktopApproval() {
+  const { user, authMode } = useCloud();
+  const id = new URLSearchParams(location.search).get('pair');
+  const active = location.pathname === '/desktop-connect' && !!id;
+  const [device, setDevice] = useState<{
+    name: string;
+    platform: string;
+    architecture: string;
+    appVersion: string;
+  } | null>(null);
+  const [error, setError] = useState(''),
+    [busy, setBusy] = useState(false),
+    [done, setDone] = useState(false);
+  useEffect(() => {
+    if (active)
+      void api<typeof device>(`devices/pair/${id}`)
+        .then(setDevice)
+        .catch((e) => setError(String(e)));
+  }, [active, id]);
+  return (
+    <Modal
+      open={active && !authMode}
+      onClose={() => location.assign('/app')}
+      title={done ? 'Desktop connected' : 'Connect Deck Desktop'}
+    >
+      {done ? (
+        <p>You can return to Deck Desktop. Choose which Deck to sync there.</p>
+      ) : (
+        <>
+          {device && (
+            <p>
+              Connect <strong>{device.name}</strong> ({device.platform} {device.architecture}, Deck{' '}
+              {device.appVersion}) to your account.
+            </p>
+          )}
+          <p>
+            Approve only a connection you started from Deck Desktop. Your local data will stay on
+            that device until you choose to sync it.
+          </p>
+          {user ? (
+            <>
+              <p>{user.email}</p>
+              <button
+                className="primary-button"
+                disabled={busy || !device}
+                onClick={async () => {
+                  setBusy(true);
+                  setError('');
+                  try {
+                    await api('devices/pair/approve', { id });
+                    setDone(true);
+                  } catch (e) {
+                    setError(String(e));
+                  } finally {
+                    setBusy(false);
+                  }
+                }}
+              >
+                Approve this device
+              </button>
+            </>
+          ) : (
+            <button
+              className="primary-button"
+              onClick={() => useCloud.setState({ authMode: 'signin' })}
+            >
+              Sign in to connect
+            </button>
+          )}
+        </>
+      )}
+      {error && <p role="alert">{error}</p>}
+      <button onClick={() => location.assign('/app')}>{done ? 'Open Deck Web' : 'Not now'}</button>
+    </Modal>
+  );
+}
+function SignOutDialog() {
+  const open = useCloud((s) => s.signOutOpen);
+  const data = useDeck((s) => s.data);
+  const [remove, setRemove] = useState(false),
+    [busy, setBusy] = useState(false),
+    [error, setError] = useState('');
+  useEffect(() => {
+    if (open) {
+      setRemove(false);
+      setError('');
+    }
+  }, [open]);
+  return (
+    <Modal
+      open={open}
+      onClose={() => {
+        if (!busy) useCloud.setState({ signOutOpen: false });
+      }}
+      title="Sign out of Deck"
+    >
+      <p>What should happen to the Deck stored on this device?</p>
+      <label className="account-signout-choice">
+        <input
+          type="radio"
+          name="signout-data"
+          checked={!remove}
+          onChange={() => setRemove(false)}
+        />
+        <span>
+          <strong>Keep data on this device</strong>
+          <small>Your tasks remain available locally. Future changes will not sync.</small>
+        </span>
+      </label>
+      <label className="account-signout-choice">
+        <input type="radio" name="signout-data" checked={remove} onChange={() => setRemove(true)} />
+        <span>
+          <strong>Remove synced data from this device</strong>
+          <small>
+            This profile’s local Deck and backups will be removed. Cloud data remains in your
+            account. Unsynced changes will be lost.
+          </small>
+        </span>
+      </label>
+      {error && <p role="alert">{error}</p>}
+      <div className="account-actions">
+        <button
+          className={remove ? 'danger-button' : 'primary-button'}
+          disabled={busy}
+          onClick={async () => {
+            if (
+              remove &&
+              deckHasContent(data) &&
+              !confirm(
+                'Remove this profile’s Deck and local backups from this device? Unsynced changes cannot be recovered.',
+              )
+            )
+              return;
+            setBusy(true);
+            try {
+              await signOut(remove);
+            } catch (e) {
+              setError(String(e));
+            } finally {
+              setBusy(false);
+            }
+          }}
+        >
+          {busy
+            ? 'Signing out…'
+            : remove
+              ? 'Remove local data and sign out'
+              : 'Keep data and sign out'}
+        </button>
+        <button disabled={busy} onClick={() => useCloud.setState({ signOutOpen: false })}>
+          Cancel
+        </button>
+      </div>
+    </Modal>
+  );
+}
+
+function AuthScreen({ initial = 'signin', onClose }: { initial?: string; onClose: () => void }) {
   const [mode, setMode] = useState(initial);
+  const callbackURL =
+    location.pathname === '/desktop-connect' ? location.pathname + location.search : '/app';
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [name, setName] = useState('');
@@ -197,12 +441,14 @@ function AuthScreen({ initial = 'signin' }: { initial?: string }) {
   const [busy, setBusy] = useState(false);
   const [google, setGoogle] = useState(false);
   const [entra, setEntra] = useState(false);
+  const [emailEnabled, setEmailEnabled] = useState(true);
   useEffect(() => {
     fetch('/api/v1/config')
       .then((r) => r.json())
       .then((v) => {
         setGoogle(v.google);
         setEntra(!!v.entra);
+        setEmailEnabled(v.email !== false);
       })
       .catch(() => {});
   }, []);
@@ -214,7 +460,7 @@ function AuthScreen({ initial = 'signin' }: { initial?: string }) {
     try {
       let result;
       if (mode === 'signup')
-        result = await authClient.signUp.email({ name, email, password, callbackURL: '/app' });
+        result = await authClient.signUp.email({ name, email, password, callbackURL });
       else if (mode === 'forgot')
         result = await authClient.requestPasswordReset({ email, redirectTo: '/reset-password' });
       else if (mode === 'reset')
@@ -222,7 +468,7 @@ function AuthScreen({ initial = 'signin' }: { initial?: string }) {
           newPassword: password,
           token: new URLSearchParams(location.search).get('token') || '',
         });
-      else result = await authClient.signIn.email({ email, password, callbackURL: '/app' });
+      else result = await authClient.signIn.email({ email, password, callbackURL });
       if (result.error) throw new Error(result.error.message);
       if (mode === 'signup') setMessage('Check your email to verify your account, then open Deck.');
       if (mode === 'forgot')
@@ -240,45 +486,20 @@ function AuthScreen({ initial = 'signin' }: { initial?: string }) {
     }
   }
   return (
-    <main className="auth-shell">
-      <section className="auth-story">
+    <div className="account-auth">
+      <section className="auth-benefits">
         <a className="auth-brand" href="/app">
           <DeckMark size={34} />
           Deck
         </a>
-        <div>
-          <span className="auth-eyebrow">A LITTLE MORE HEADSPACE.</span>
-          <h1>
-            Your Deck,
-            <br />
-            <em>anywhere.</em>
-          </h1>
-          <p>
-            The things on your mind.
-            <br />
-            The place to put them down.
-          </p>
-          <div className="auth-card">
-            <span>
-              <span className="auth-checkbox">
-                <Check size={13} />
-              </span>
-              Make room for what matters
-            </span>
-            <span>
-              <span className="auth-checkbox" />
-              Pick up where you left off
-            </span>
-            <span>
-              <span className="auth-checkbox" />
-              Take your Deck with you <span className="auth-tag">Today</span>
-            </span>
-            <div className="auth-card-footer">
-              <span className="status-dot" /> One Deck. All your devices.
-            </div>
-          </div>
-        </div>
-        <small>Fast. Calm. Always yours.</small>
+        <h2>Take your Deck anywhere</h2>
+        <p>Back up your Deck and access it from other devices.</p>
+        <ul>
+          <li>Back up your tasks, Stacks, and templates</li>
+          <li>Sync across devices, including Deck Web and mobile browsers</li>
+          <li>Recover your Deck on a new computer</li>
+        </ul>
+        <p>Your Deck stays available offline. You choose what to sync after signing in.</p>
       </section>
       <section className="auth-form-panel">
         <div className="auth-form-wrap">
@@ -294,7 +515,7 @@ function AuthScreen({ initial = 'signin' }: { initial?: string }) {
           </h2>
           <p>
             {mode === 'signup'
-              ? 'Create your account and make a little space.'
+              ? 'Create an account when you’re ready to sync.'
               : mode === 'forgot'
                 ? 'We’ll email you a link to reset your password.'
                 : mode === 'reset'
@@ -308,7 +529,7 @@ function AuthScreen({ initial = 'signin' }: { initial?: string }) {
               onClick={async () => {
                 setBusy(true);
                 setError('');
-                const result = await authClient.signIn.social({ provider: 'entra', callbackURL: '/app' });
+                const result = await authClient.signIn.social({ provider: 'entra', callbackURL });
                 if (result.error) {
                   setError(result.error.message || 'Sign-in failed');
                   setBusy(false);
@@ -318,7 +539,8 @@ function AuthScreen({ initial = 'signin' }: { initial?: string }) {
               {busy ? 'One moment…' : 'Continue with email'}
               <ArrowRight size={16} />
             </button>
-          ) : google && ['signin', 'signup'].includes(mode) && (
+          ) : null}
+          {google && ['signin', 'signup'].includes(mode) && (
             <>
               <button
                 className="google-button"
@@ -327,7 +549,7 @@ function AuthScreen({ initial = 'signin' }: { initial?: string }) {
                   setBusy(true);
                   const r = await authClient.signIn.social({
                     provider: 'google',
-                    callbackURL: '/app',
+                    callbackURL,
                   });
                   if (r.error) {
                     setError(r.error.message || 'Google sign-in failed');
@@ -340,95 +562,110 @@ function AuthScreen({ initial = 'signin' }: { initial?: string }) {
               <div className="auth-divider">or with email</div>
             </>
           )}
-          {!entra && <form onSubmit={submit}>
-            {mode === 'signup' && (
-              <label>
-                Your name
-                <input
-                  autoComplete="name"
-                  required
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                />
-              </label>
-            )}
-            {mode !== 'reset' && (
-              <label>
-                Email
-                <input
-                  type="email"
-                  autoComplete="email"
-                  placeholder="you@example.com"
-                  required
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                />
-              </label>
-            )}
-            {mode !== 'forgot' && (
-              <label>
-                Password
-                <input
-                  type="password"
-                  autoComplete={mode === 'signin' ? 'current-password' : 'new-password'}
-                  minLength={mode === 'signin' ? 1 : 12}
-                  maxLength={128}
-                  required
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                />
-              </label>
-            )}
-            {mode === 'signin' && (
+          {emailEnabled && (
+            <form onSubmit={submit}>
+              {mode === 'signup' && (
+                <label>
+                  Your name
+                  <input
+                    autoComplete="name"
+                    required
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
+                  />
+                </label>
+              )}
+              {mode !== 'reset' && (
+                <label>
+                  Email
+                  <input
+                    type="email"
+                    autoComplete="email"
+                    placeholder="you@example.com"
+                    required
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                  />
+                </label>
+              )}
+              {mode !== 'forgot' && (
+                <label>
+                  Password
+                  <input
+                    type="password"
+                    autoComplete={mode === 'signin' ? 'current-password' : 'new-password'}
+                    minLength={mode === 'signin' ? 1 : 12}
+                    maxLength={128}
+                    required
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                  />
+                </label>
+              )}
+              {mode === 'signin' && (
+                <button
+                  className="auth-link forgot"
+                  type="button"
+                  onClick={() => {
+                    setMode('forgot');
+                    setError('');
+                  }}
+                >
+                  Forgot password?
+                </button>
+              )}
+              {error && (
+                <p className="auth-error" role="alert">
+                  {error}
+                </p>
+              )}
+              {message && (
+                <p className="auth-message" role="status">
+                  {message}
+                </p>
+              )}
+              <button className="primary-button auth-submit" disabled={busy}>
+                {busy
+                  ? 'One moment…'
+                  : mode === 'signup'
+                    ? 'Create account with email'
+                    : mode === 'forgot'
+                      ? 'Send reset link'
+                      : mode === 'reset'
+                        ? 'Update password'
+                        : 'Continue with Email'}
+                <ArrowRight size={16} />
+              </button>
+            </form>
+          )}
+          {emailEnabled && (
+            <p className="auth-switch">
+              {mode === 'signin' ? 'New to Deck? ' : 'Already have an account? '}
               <button
-                className="auth-link forgot"
-                type="button"
+                className="auth-link"
                 onClick={() => {
-                  setMode('forgot');
+                  setMode(mode === 'signin' ? 'signup' : 'signin');
                   setError('');
+                  setMessage('');
                 }}
               >
-                Forgot password?
+                {mode === 'signin' ? 'Create an account' : 'Sign in'}
               </button>
-            )}
-            {error && (
-              <p className="auth-error" role="alert">
-                {error}
-              </p>
-            )}
-            {message && (
-              <p className="auth-message" role="status">
-                {message}
-              </p>
-            )}
-            <button className="primary-button auth-submit" disabled={busy}>
-              {busy
-                ? 'One moment…'
-                : mode === 'signup'
-                  ? 'Create account with email'
-                  : mode === 'forgot'
-                    ? 'Send reset link'
-                    : mode === 'reset'
-                      ? 'Update password'
-                      : 'Open my Deck'}
-              <ArrowRight size={16} />
-            </button>
-          </form>}
-          {!entra && <p className="auth-switch">
-            {mode === 'signin' ? 'New to Deck? ' : 'Already have an account? '}
-            <button
-              className="auth-link"
-              onClick={() => {
-                setMode(mode === 'signin' ? 'signup' : 'signin');
-                setError('');
-                setMessage('');
-              }}
-            >
-              {mode === 'signin' ? 'Create an account' : 'Sign in'}
-            </button>
-          </p>}
-          {entra && error && <p className="auth-error" role="alert">{error}</p>}
-          {entra && <p className="auth-switch">Create an account, sign in, or reset your password on Deck’s secure sign-in page.</p>}
+            </p>
+          )}
+          {entra && error && (
+            <p className="auth-error" role="alert">
+              {error}
+            </p>
+          )}
+          {entra && (
+            <p className="auth-switch">
+              Create an account, sign in, or reset your password on Deck’s secure sign-in page.
+            </p>
+          )}
+          <button className="secondary-button" onClick={onClose}>
+            Not now
+          </button>
           <div className="auth-reassurance">
             <ShieldCheck size={17} />
             <span>
@@ -440,39 +677,6 @@ function AuthScreen({ initial = 'signin' }: { initial?: string }) {
         </div>
         <small className="auth-bottom">A fast, calm, local-first task manager.</small>
       </section>
-    </main>
+    </div>
   );
-}
-
-function DesktopSync() {
-  const user = useCloud((s) => s.user);
-  const ready = useDeck((s) => s.ready);
-  useEffect(() => {
-    if (!ready) return;
-    try {
-      const cached = JSON.parse(localStorage.getItem('deck-native-user') || 'null');
-      const owner = useDeck.getState().data.cloud?.userId;
-      if (cached?.id && (!owner || owner === cached.id)) useCloud.setState({ user: cached });
-    } catch {
-      /* no cached native identity */
-    }
-    const connect = () => {
-      invoke<{ id: string; name: string; email: string }>('cloud_request', {
-        path: 'me',
-        body: null,
-      })
-        .then((next) => {
-          const owner = useDeck.getState().data.cloud?.userId;
-          if (!owner || owner === next.id) {
-            localStorage.setItem('deck-native-user', JSON.stringify(next));
-            useCloud.setState({ user: next });
-          }
-        })
-        .catch(() => {});
-    };
-    connect();
-    window.addEventListener('online', connect);
-    return () => window.removeEventListener('online', connect);
-  }, [ready]);
-  return user ? <SyncLifecycle /> : null;
 }

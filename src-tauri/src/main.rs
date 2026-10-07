@@ -14,12 +14,18 @@ fn main() {
         })
         .invoke_handler(tauri::generate_handler![
             commands::load_data,
+            commands::switch_profile,
+            commands::clear_local_data,
             commands::save_data,
             commands::database_location,
             commands::create_backup,
             commands::list_backups,
             commands::restore_backup,
             commands::save_export,
+            commands::discover_projects,
+            cloud::device_info,
+            cloud::begin_cloud_signin,
+            cloud::poll_cloud_signin,
             cloud::connect_cloud,
             cloud::cloud_request,
             cloud::disconnect_cloud

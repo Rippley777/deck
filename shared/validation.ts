@@ -121,5 +121,15 @@ export const deckSchema = z
   });
 export const syncSchema = z.object({
   baseVersion: z.number().int().nonnegative(),
+  mode: z.literal('replace').optional(),
   data: deckSchema,
+});
+
+export const deviceSchema = z.object({
+  id: z.string().uuid(),
+  name: z.string().trim().min(1).max(100),
+  platform: z.string().max(100),
+  architecture: z.string().max(100),
+  appVersion: z.string().max(100),
+  lastSync: z.string().datetime().nullable().optional(),
 });

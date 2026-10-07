@@ -17,7 +17,7 @@ import {
 import { Modal, IconButton } from '../../components/ui';
 import { useDeck } from '../../stores/deck';
 import { download } from '../../lib/transfer';
-import { emptyTemplate } from '../../lib/template-presets';
+import { emptyTemplate, builtinTemplates } from '../../lib/template-presets';
 import {
   generateFromTemplate,
   interpolate,
@@ -679,12 +679,22 @@ export function TemplateDialog() {
           {!visible.length && (
             <div className="template-empty">
               <Sparkles size={24} />
-              <h3>A little room for your routine.</h3>
+              <h3>{query ? 'No matching templates.' : 'No templates yet.'}</h3>
               <p>
                 {query
                   ? 'Try another search or create your own template.'
                   : 'Create a template to save the setup for next time.'}
               </p>
+              {!templates.length && !query && (
+                <button
+                  className="secondary-button"
+                  onClick={() =>
+                    commit({ ...useDeck.getState().data, templates: builtinTemplates() })
+                  }
+                >
+                  Add starter templates
+                </button>
+              )}
             </div>
           )}
           <div className="template-library-footer">

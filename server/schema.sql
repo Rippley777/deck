@@ -30,3 +30,17 @@ CREATE TABLE IF NOT EXISTS deck_devices (
   last_active_at timestamptz NOT NULL DEFAULT now(),
   expires_at timestamptz NOT NULL DEFAULT now() + interval '90 days'
 );
+-- Additive migrations: existing accounts, Decks, revisions and device tokens are retained.
+ALTER TABLE deck_devices ADD COLUMN IF NOT EXISTS platform text;
+ALTER TABLE deck_devices ADD COLUMN IF NOT EXISTS architecture text;
+ALTER TABLE deck_devices ADD COLUMN IF NOT EXISTS app_version text;
+ALTER TABLE deck_devices ADD COLUMN IF NOT EXISTS installation_id text;
+ALTER TABLE deck_devices ADD COLUMN IF NOT EXISTS last_sync timestamptz;
+CREATE INDEX IF NOT EXISTS deck_devices_installation ON deck_devices(user_id, installation_id);
+CREATE TABLE IF NOT EXISTS deck_pairings (
+  id text PRIMARY KEY,
+  secret_hash text NOT NULL,
+  metadata text NOT NULL,
+  user_id text REFERENCES "user"(id) ON DELETE CASCADE,
+  expires_at timestamptz NOT NULL
+);

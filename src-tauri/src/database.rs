@@ -7,7 +7,8 @@ use std::{
 
 pub struct Database {
     connection: Mutex<Connection>,
-    path: PathBuf,
+    path: Mutex<PathBuf>,
+    directory: PathBuf,
 }
 
 #[derive(serde::Serialize)]
@@ -43,12 +44,49 @@ impl Database {
         }
         Ok(Self {
             connection: Mutex::new(connection),
-            path,
+            directory: parent.to_path_buf(),
+            path: Mutex::new(path),
         })
     }
 
+    pub fn switch_profile(&self, profile: &str) -> Result<Option<String>> {
+        if !profile.is_empty()
+            && (profile.len() > 200
+                || !profile
+                    .bytes()
+                    .all(|c| c.is_ascii_alphanumeric() || c == b'-' || c == b'_'))
+        {
+            return Err("Invalid local profile".into());
+        }
+        let path = if profile.is_empty() {
+            self.directory.join("deck.db")
+        } else {
+            self.directory
+                .join("profiles")
+                .join(profile)
+                .join("deck.db")
+        };
+        let next = Database::open(path.clone())?;
+        let value = next.load()?;
+        let mut connection = self.connection.lock().map_err(error)?;
+        *connection = next.connection.into_inner().map_err(error)?;
+        *self.path.lock().map_err(error)? = path;
+        Ok(value)
+    }
+
+    pub fn clear(&self) -> Result<()> {
+        let connection = self.connection.lock().map_err(error)?;
+        // Secure deletion also removes the previous document from SQLite's free pages.
+        connection.execute_batch("PRAGMA secure_delete=ON; DELETE FROM documents; PRAGMA wal_checkpoint(TRUNCATE); VACUUM;").map_err(error)?;
+        let folder = self.backup_folder();
+        if folder.exists() {
+            fs::remove_dir_all(folder).map_err(error)?;
+        }
+        Ok(())
+    }
+
     pub fn location(&self) -> String {
-        self.path.to_string_lossy().into_owned()
+        self.path.lock().unwrap().to_string_lossy().into_owned()
     }
 
     pub fn load(&self) -> Result<Option<String>> {
@@ -103,7 +141,7 @@ impl Database {
     }
 
     fn backup_folder(&self) -> PathBuf {
-        self.path.parent().unwrap().join("backups")
+        self.path.lock().unwrap().parent().unwrap().join("backups")
     }
 
     fn snapshot(&self, connection: &Connection, suffix: &str) -> Result<()> {
@@ -214,11 +252,12 @@ pub fn default_path(directory: &Path) -> PathBuf {
 #[cfg(test)]
 mod tests {
     use super::*;
+    static FIXTURE_ID: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
     fn fixture() -> (Database, PathBuf) {
         let folder = std::env::temp_dir().join(format!(
             "deck-test-{}-{}",
             std::process::id(),
-            chrono::Utc::now().timestamp_nanos_opt().unwrap()
+            FIXTURE_ID.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
         ));
         (Database::open(folder.join("deck.db")).unwrap(), folder)
     }
@@ -263,6 +302,36 @@ mod tests {
             .any(|b| b.name.contains("before-restore")));
         assert!(db.restore("../deck.db").is_err());
         assert_eq!(db.load().unwrap(), Some(before));
+        drop(db);
+        fs::remove_dir_all(folder).unwrap();
+    }
+    #[test]
+    fn local_profiles_keep_separate_databases_and_backups() {
+        let (db, folder) = fixture();
+        let a = workspace("Account A");
+        db.save(&a).unwrap();
+        assert!(db.switch_profile("account-b").unwrap().is_none());
+        let b = workspace("Account B");
+        db.save(&b).unwrap();
+        assert_eq!(db.switch_profile("").unwrap(), Some(a.clone()));
+        assert_eq!(db.load().unwrap(), Some(a));
+        assert_eq!(db.switch_profile("account-b").unwrap(), Some(b));
+        assert!(db.switch_profile("../outside").is_err());
+        drop(db);
+        fs::remove_dir_all(folder).unwrap();
+    }
+    #[test]
+    fn removing_one_profile_does_not_remove_other_profiles() {
+        let (db, folder) = fixture();
+        let original = workspace("Keep default profile");
+        db.save(&original).unwrap();
+        db.switch_profile("account-b").unwrap();
+        db.save(&workspace("Remove this profile")).unwrap();
+        db.clear().unwrap();
+        assert!(db.load().unwrap().is_none());
+        assert!(db.backups().unwrap().is_empty());
+        assert_eq!(db.switch_profile("").unwrap(), Some(original));
+        assert_eq!(db.backups().unwrap().len(), 1);
         drop(db);
         fs::remove_dir_all(folder).unwrap();
     }

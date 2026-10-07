@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './fixtures';
 test('a recurring completion creates exactly one next occurrence and undo removes it', async ({
   page,
 }) => {

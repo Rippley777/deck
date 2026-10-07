@@ -70,6 +70,12 @@ export function GraphView() {
       t.blockedBy.some((id) => data.tasks.some((o) => o.id === id && !o.completedAt)),
   );
   const unstacked = data.tasks.filter((t) => !t.stackId && !t.completedAt);
+  const busiestStack = data.stacks
+    .map((stack) => ({
+      ...stack,
+      active: data.tasks.filter((task) => task.stackId === stack.id && !task.completedAt).length,
+    }))
+    .sort((a, b) => b.active - a.active)[0];
   useEffect(() => {
     setFocus(graphFocus);
   }, [graphFocus]);
@@ -527,9 +533,20 @@ export function GraphView() {
         {stats.nodes === 0 && (
           <div className="graph-empty">
             <Network size={40} />
-            <h3>No connections in this view.</h3>
-            <button className="secondary-button" onClick={() => setFilters(initialFilters)}>
-              Clear filters
+            <h3>
+              {data.tasks.length || data.stacks.length
+                ? 'No connections in this view.'
+                : 'Your work will connect here.'}
+            </h3>
+            <button
+              className="secondary-button"
+              onClick={() =>
+                data.tasks.length || data.stacks.length
+                  ? setFilters(initialFilters)
+                  : useDeck.getState().setModal('quick')
+              }
+            >
+              {data.tasks.length || data.stacks.length ? 'Clear filters' : 'Add Task'}
             </button>
           </div>
         )}
@@ -562,7 +579,7 @@ export function GraphView() {
             />
           </div>
         )}
-        {insights && (
+        {insights && elements.length > 0 && (
           <div className="graph-insights">
             <div className="insights-title">
               <span>IN THE CONNECTIONS</span>
@@ -603,20 +620,20 @@ export function GraphView() {
               </span>
               <ArrowRight size={12} />
             </button>
-            <button
-              onClick={() => {
-                filter({ ...initialFilters, stack: 'oddware' });
-                setFocus('oddware');
-              }}
-            >
-              <span className="insight-dot purple" />
-              <span>
-                <strong>Oddware</strong> has{' '}
-                {data.tasks.filter((t) => t.stackId === 'oddware' && !t.completedAt).length} active
-                cards
-              </span>
-              <ArrowRight size={12} />
-            </button>
+            {busiestStack && (
+              <button
+                onClick={() => {
+                  filter({ ...initialFilters, stack: busiestStack.id });
+                  setFocus(busiestStack.id);
+                }}
+              >
+                <span className="insight-dot purple" />
+                <span>
+                  <strong>{busiestStack.name}</strong> has {busiestStack.active} active cards
+                </span>
+                <ArrowRight size={12} />
+              </button>
+            )}
             <p>
               Patterns in your work. Nothing more,
               <br />

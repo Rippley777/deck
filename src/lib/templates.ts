@@ -1,9 +1,9 @@
 import type { DeckData, DeckTemplate, TemplateContext, Task } from '../types';
 import { makeTask } from './seed';
-import { builtinTemplates, emptyTemplate, emptyTemplateItem } from './template-presets';
+import { emptyTemplate, emptyTemplateItem } from './template-presets';
 
 export function withTemplates(data: DeckData): DeckData {
-  if (!data.templates) return { ...data, templates: builtinTemplates() };
+  if (!data.templates) return { ...data, templates: [] };
   if (data.templates.every((template) => /^#[\da-f]{6}$/i.test(template.color))) return data;
   return {
     ...data,

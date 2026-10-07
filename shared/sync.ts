@@ -32,7 +32,8 @@ export function mergeDeck(base: DeckData, local: DeckData, remote: DeckData) {
     if (
       Array.isArray(l) &&
       Array.isArray(r) &&
-      ['tasks', 'stacks', 'goals', 'templates'].includes(path)
+      (['tasks', 'stacks', 'goals', 'templates'].includes(path) ||
+        /\.(checklist|items)$/.test(path))
     ) {
       const bm = new Map((b || []).map((v: any) => [v.id, v]));
       const lm = new Map(l.map((v: any) => [v.id, v]));
@@ -40,6 +41,20 @@ export function mergeDeck(base: DeckData, local: DeckData, remote: DeckData) {
       return [...new Set([...rm.keys(), ...lm.keys()])]
         .map((id) => merge(bm.get(id), lm.get(id), rm.get(id), `${path}.${id}`))
         .filter((v) => v !== undefined);
+    }
+    // Membership edits merge independently for embedded graph references and tags.
+    if (
+      Array.isArray(l) &&
+      Array.isArray(r) &&
+      l.every((v) => typeof v === 'string') &&
+      r.every((v) => typeof v === 'string')
+    ) {
+      const original = new Set(Array.isArray(b) ? b : []);
+      const left = new Set(l),
+        right = new Set(r);
+      return [...new Set([...r, ...l])].filter(
+        (value) => !original.has(value) || (left.has(value) && right.has(value)),
+      );
     }
     if (
       l &&

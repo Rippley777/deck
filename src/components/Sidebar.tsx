@@ -6,7 +6,8 @@ import {
   ChevronsLeft,
   Command,
   CopyPlus,
-  Flower2,
+  Cloud,
+  CloudOff,
   Inbox,
   Infinity,
   Layers3,
@@ -22,6 +23,7 @@ import { useMemo } from 'react';
 import { DeckProgress, DeckProgressTooltip } from './progress/DeckProgress';
 import { taskProgress, progressSummary } from '../lib/progress';
 import { useDeck } from '../stores/deck';
+import { useCloud, openAccount } from '../lib/cloud';
 import { DeckMark, IconButton } from './ui';
 import type { View } from '../types';
 import { addDays, today } from '../lib/dates';
@@ -37,6 +39,7 @@ const nav: { id: View; label: string; icon: LucideIcon; color: string; shortcut?
 ];
 export function Sidebar() {
   const templateMenu = useTemplateContextMenu();
+  const { user, status } = useCloud();
   const { data, view, setView, setModal, updateTask, commit, duplicateStack } = useDeck();
   const active = data.tasks.filter((t) => !t.completedAt);
   const stackProgress = useMemo(
@@ -88,7 +91,7 @@ export function Sidebar() {
         />
       </div>
       <button className="workspace-switch" onClick={() => setModal('settings')}>
-        <span className="avatar">A</span>
+        <span className="avatar">{user?.name?.[0] || 'D'}</span>
         <span>
           My workspace<small>A little clarity, every day.</small>
         </span>
@@ -146,6 +149,12 @@ export function Sidebar() {
         <IconButton icon={Plus} label="Create stack" onClick={() => setModal('stack')} />
       </div>
       <nav aria-label="Stacks">
+        {!data.stacks.length && (
+          <div className="sidebar-empty">
+            <strong>No Stacks yet.</strong>
+            <small>Create one when a project needs more structure.</small>
+          </div>
+        )}
         {data.stacks.map((stack) => (
           <div className="stack-nav-row" key={stack.id}>
             <DeckProgressTooltip
@@ -209,17 +218,20 @@ export function Sidebar() {
         ))}
       </nav>
       <button className="new-stack" onClick={() => setModal('stack')}>
-        <Plus size={15} /> New stack
+        <Plus size={15} /> {data.stacks.length ? 'New stack' : 'Create Stack'}
       </button>
       <div className="sidebar-bottom">
-        <div className="sidebar-note">
-          <Flower2 size={18} />
+        <button
+          className="sidebar-sync"
+          onClick={openAccount}
+          aria-label="Account and sync settings"
+        >
+          {user && status !== 'Local only' ? <Cloud size={16} /> : <CloudOff size={16} />}
           <span>
-            One thing at a time.
-            <br />
-            <small>You’re doing just fine.</small>
+            {user ? status : 'Local only'}
+            <small>{user ? user.email : 'Sign in to sync'}</small>
           </span>
-        </div>
+        </button>
         <div className="sidebar-footer">
           <button onClick={() => setModal('settings')}>
             <Settings2 size={16} /> Settings

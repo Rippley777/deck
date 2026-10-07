@@ -470,3 +470,121 @@
     opacity: 1;
   }
 }
+.account-auth-modal {
+  width: min(780px, calc(100vw - 32px));
+}
+.account-auth {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 32px;
+  padding: 8px 0;
+}
+.auth-benefits .auth-brand {
+  color: var(--text);
+  font-size: 22px;
+}
+.auth-benefits h2 {
+  margin-top: 28px;
+}
+.auth-benefits p,
+.auth-benefits li {
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.7;
+}
+.account-auth .auth-form-panel {
+  padding: 0;
+  background: transparent;
+}
+.account-auth .auth-form-wrap {
+  max-width: none;
+  width: 100%;
+}
+.account-auth .auth-bottom {
+  display: none;
+}
+.account-signout-choice {
+  display: flex;
+  gap: 12px;
+  margin: 20px 0;
+  align-items: flex-start;
+}
+.account-signout-choice small {
+  display: block;
+  color: var(--muted);
+  line-height: 1.6;
+  margin-top: 5px;
+}
+.sync-alternatives {
+  margin-top: 24px;
+  border-top: 1px solid var(--border);
+  padding-top: 12px;
+}
+.sync-alternatives p {
+  font-size: 12px;
+  color: var(--muted);
+  line-height: 1.6;
+}
+.sidebar-sync {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  text-align: left;
+  padding: 10px 14px;
+  color: var(--muted);
+  font-size: 12px;
+}
+.sidebar-sync small,
+.sidebar-empty small {
+  display: block;
+  font-size: 11px;
+  margin-top: 4px;
+  line-height: 1.5;
+}
+.sidebar-empty {
+  padding: 6px 18px;
+  color: var(--muted);
+  font-size: 12px;
+}
+.sidebar-empty button {
+  margin-top: 10px;
+  color: var(--purple);
+}
+.local-profiles {
+  margin-top: 24px;
+}
+@media (max-width: 640px) {
+  .account-auth {
+    grid-template-columns: 1fr;
+    gap: 20px;
+  }
+  .auth-benefits .auth-brand {
+    display: none;
+  }
+  .auth-benefits h2 {
+    margin-top: 0;
+  }
+}
+.account-auth .auth-form-panel {
+  min-height: 0;
+  display: block;
+}
+.auth-benefits h2 {
+  font-family: Lora, serif;
+  font-size: 24px;
+  font-weight: 400;
+  line-height: 1.35;
+}
+.auth-benefits ul {
+  padding-left: 18px;
+  margin: 14px 0;
+}
+.local-profiles button {
+  display: block;
+  margin-top: 10px;
+  color: var(--purple);
+}
+.local-profiles button:disabled {
+  color: var(--muted);
+}

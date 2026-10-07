@@ -57,8 +57,18 @@ export interface Settings {
   layout: 'force' | 'hierarchy' | 'radial' | 'timeline';
 }
 export interface DeckData {
+  /** Device/profile identity and consent. Never sent to the cloud. */
+  local?: {
+    deckId: string;
+    projectPaths?: Record<string, string>;
+    accountId?: string;
+    syncEnabled: boolean;
+    declinedAccountId?: string;
+    lastSynced?: string;
+  };
   cloudPristine?: boolean;
   cloud?: {
+    deviceId?: string;
     userId: string;
     version: number;
     base: Omit<DeckData, 'cloud'>;

@@ -2,8 +2,10 @@ import { create } from 'zustand';
 import type { DeckData, Task, Stack, View, TemplateContext } from '../types';
 import { withTemplates } from '../lib/templates';
 import { defaultSettings } from '../types';
-import { seedData, makeTask } from '../lib/seed';
+import { makeTask } from '../lib/seed';
+import { emptyDeck } from '../../shared/sync';
 import { repository } from '../lib/repository';
+import { rememberProfile } from '../lib/profiles';
 import { nextOccurrence, today } from '../lib/dates';
 type Modal =
   | 'quick'
@@ -24,6 +26,7 @@ interface Store {
   selected: string | null;
   selection: string[];
   modal: Modal;
+  settingsTab: string;
   sidebar: boolean;
   search: string;
   toast: { message: string; undo?: () => void } | null;
@@ -66,6 +69,7 @@ export const useDeck = create<Store>((set, get) => ({
   selected: null,
   selection: [],
   modal: null,
+  settingsTab: 'General',
   sidebar: true,
   search: '',
   toast: null,
@@ -80,20 +84,13 @@ export const useDeck = create<Store>((set, get) => ({
       try {
         const saved = await repository.load();
         const data = withTemplates(
-          saved ||
-            (import.meta.env.VITE_DECK_PORTAL === 'true'
-              ? {
-                  cloudPristine: true,
-                  version: 1 as const,
-                  tasks: [],
-                  stacks: [],
-                  goals: [],
-                  headings: [],
-                  settings: defaultSettings,
-                }
-              : seedData()),
+          saved || {
+            ...emptyDeck({ ...defaultSettings }),
+            local: { deckId: crypto.randomUUID(), syncEnabled: false },
+          },
         );
         if (data !== saved) await repository.save(data);
+        rememberProfile(localStorage.getItem('deck-active-profile') || '', data);
         set({ data, ready: true });
       } catch (e) {
         set({ error: `Could not open your local database: ${String(e)}`, ready: true });
@@ -151,7 +148,7 @@ export const useDeck = create<Store>((set, get) => ({
               task.recurrence,
               task.scheduled && task.scheduled > today() ? task.scheduled : today(),
             ),
-            checklist: task.checklist.map((c) => ({ ...c, done: false })),
+            checklist: task.checklist.map((c) => ({ ...c, id: crypto.randomUUID(), done: false })),
             createdAt: new Date().toISOString(),
             updatedAt: new Date().toISOString(),
           })
@@ -256,7 +253,9 @@ export const useDeck = create<Store>((set, get) => ({
         ...task,
         id: crypto.randomUUID(),
         completedAt: null,
+        checklist: task.checklist.map((item) => ({ ...item, id: crypto.randomUUID() })),
         createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
       });
   },
   addStack: (stack) => {

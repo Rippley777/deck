@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './fixtures';
 
 for (const entry of ['stack menu', 'section quick add', 'global picker'] as const) {
   test(`task template added from ${entry} gets a top-level stack heading`, async ({ page }) => {

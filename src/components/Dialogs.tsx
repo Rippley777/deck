@@ -232,7 +232,7 @@ export function Dialogs() {
               ? section
               : plannedDate || addDays(1)
             : null),
-      heading: section && !/^\d{4}-/.test(section) ? section : data.headings[0] || 'Focus today',
+      heading: section && !/^\d{4}-/.test(section) ? section : data.headings[0] || '',
     });
     sessionStorage.removeItem('deck-add-heading');
     close();
@@ -283,9 +283,7 @@ export function Dialogs() {
             {!parsed.scheduled &&
               !parsed.stackId &&
               parsed.tags.length === 0 &&
-              !parsed.recurrence && (
-                <small>Try “Finish the README tomorrow #Oddware @writing”</small>
-              )}
+              !parsed.recurrence && <small>Try “Finish the README tomorrow @writing”</small>}
           </div>
           <button
             type="button"
@@ -395,7 +393,7 @@ export function Dialogs() {
           <span>
             ↑ ↓ navigate <span>↵ open</span>
           </span>
-          <small>Try project:Oddware or tag:design</small>
+          <small>Try tag:design or completed:true</small>
         </div>
       </Modal>
       <Modal
