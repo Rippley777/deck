@@ -23,6 +23,8 @@ fn main() {
             commands::restore_backup,
             commands::save_export,
             commands::discover_projects,
+            cloud::open_github_resource,
+            cloud::open_pit_boss,
             cloud::device_info,
             cloud::begin_cloud_signin,
             cloud::poll_cloud_signin,

@@ -5,6 +5,7 @@ export const test = base.extend<{ demoWorkspace: void }>({
   demoWorkspace: [
     async ({ page }, use) => {
       await page.goto('/');
+      await page.getByRole('button', { name: 'Today', exact: true }).first().click();
       await page.getByRole('heading', { name: 'Today’s Deck' }).waitFor();
       await page.evaluate(async () => {
         const path = '/src/stores/deck.ts';

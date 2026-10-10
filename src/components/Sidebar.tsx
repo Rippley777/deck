@@ -103,6 +103,15 @@ export function Sidebar() {
         <kbd>⌘ K</kbd>
       </button>
       <nav aria-label="Main navigation">
+        <button
+          className={`nav-item ${view === 'command' ? 'active' : ''}`}
+          aria-label="Command Center"
+          aria-current={view === 'command' ? 'page' : undefined}
+          onClick={() => setView('command')}
+        >
+          <Layers3 size={18} />
+          <span>Command Center</span>
+        </button>
         {nav.map(({ id, label, icon: Icon, color, shortcut }) => (
           <button
             key={id}
@@ -248,5 +257,6 @@ export function Sidebar() {
   );
 }
 export const viewName = (view: View) =>
-  nav.find((n) => n.id === view)?.label || (view === 'graph' ? 'Graph' : 'Stack');
+  (view === 'command' ? 'Command Center' : nav.find((n) => n.id === view)?.label) ||
+  (view === 'graph' ? 'Graph' : 'Stack');
 export { Layers3 };

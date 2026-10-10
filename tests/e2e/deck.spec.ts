@@ -1,6 +1,7 @@
 import { test, expect } from './fixtures';
 test.beforeEach(async ({ page }) => {
   await page.goto('/');
+  await page.getByRole('button', { name: 'Today', exact: true }).first().click();
   await expect(page.getByRole('heading', { name: 'Today’s Deck' })).toBeVisible();
 });
 test('checkbox selection deletes multiple cards with undo and persists deletion', async ({
@@ -41,6 +42,7 @@ test('checkbox selection deletes multiple cards with undo and persists deletion'
   await page.getByRole('button', { name: 'Delete 2 selected cards', exact: true }).click();
   await expect(page.getByText('All changes saved')).toBeVisible();
   await page.reload();
+  await page.getByRole('button', { name: 'Today', exact: true }).first().click();
   await expect(page.getByRole('heading', { name: 'Today’s Deck' })).toBeVisible();
   await expect(first).not.toBeVisible();
   await expect(second).not.toBeVisible();
@@ -71,6 +73,7 @@ test('capture, edit, checklist, complete, undo, and persist a card', async ({ pa
   ).toBeVisible();
   await expect(page.getByText('All changes saved')).toBeVisible();
   await page.reload();
+  await page.getByRole('button', { name: 'Today', exact: true }).first().click();
   await expect(
     page.getByRole('button', { name: 'Open Prepare launch notes', exact: true }),
   ).toBeVisible();

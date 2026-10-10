@@ -59,3 +59,10 @@ CREATE TABLE dbo.deck_pairings (
   user_id VARCHAR(36) NULL REFERENCES dbo.[user](id) ON DELETE CASCADE,
   expires_at DATETIME2 NOT NULL
 );
+
+IF OBJECT_ID(N'dbo.deck_github', N'U') IS NULL
+CREATE TABLE dbo.deck_github (
+  user_id VARCHAR(36) NOT NULL PRIMARY KEY REFERENCES dbo.[user](id) ON DELETE CASCADE,
+  version INT NOT NULL,
+  data NVARCHAR(MAX) NOT NULL CHECK (ISJSON(data)=1)
+);

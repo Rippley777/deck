@@ -1,3 +1,5 @@
+import { githubWebhook } from './command-center/webhook';
+import { commandCenterRoutes } from './command-center/routes';
 import { deviceRoutes } from './devices';
 import express from 'express';
 import { randomBytes, createHash } from 'node:crypto';
@@ -47,6 +49,18 @@ app.get('/api/v1/config', (_req, res) =>
     entra: entraEnabled,
     email: emailEnabled,
   }),
+);
+// Signature-authenticated raw webhook must precede JSON parsing and browser CSRF middleware.
+app.use(
+  '/api/v1/command-center/github/webhook',
+  githubWebhook(
+    (sql, values) =>
+      pool.query(
+        sql.replace(/@p(\d+)/g, (_, index) => '$' + index),
+        values,
+      ),
+    false,
+  ),
 );
 app.use('/api/auth', (req, _res, next) => {
   req.headers['x-deck-client-ip'] = req.ip || req.socket.remoteAddress || 'unknown';
@@ -114,6 +128,18 @@ app.use('/api/v1', (req, res, next) => {
   next();
 });
 app.use('/api/v1', devices.privateRoutes);
+app.use(
+  '/api/v1/command-center',
+  commandCenterRoutes(
+    (sql, values) =>
+      pool.query(
+        sql.replace(/@p(\d+)/g, (_, index) => '$' + index),
+        values,
+      ),
+    false,
+    origin,
+  ),
+);
 app.get('/api/v1/me', async (_req, res) => {
   const user = (
     await pool.query('SELECT id,name,email FROM "user" WHERE id=$1', [res.locals.userId])

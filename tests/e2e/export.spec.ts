@@ -27,6 +27,7 @@ for (const format of ['json', 'csv'] as const) {
     page,
   }) => {
     await page.goto('/');
+    await page.getByRole('button', { name: 'Today', exact: true }).first().click();
     await expect(page.getByRole('heading', { name: 'Today’s Deck' })).toBeVisible();
     await page.getByRole('button', { name: 'Oddware stack', exact: true }).click();
     await page.getByRole('button', { name: 'Settings', exact: true }).click();

@@ -3,6 +3,7 @@ import { houseEdge } from '@house-edge/analytics';
 export { houseEdge };
 
 const viewPaths = new Map<string, string>([
+  ['command', '/command-center'],
   ['inbox', '/inbox'],
   ['today', '/today'],
   ['upcoming', '/upcoming'],

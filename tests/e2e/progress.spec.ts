@@ -40,6 +40,7 @@ async function importStack(page: Page, total: number, completed = 3) {
 
 test.beforeEach(async ({ page }) => {
   await page.goto('/');
+  await page.getByRole('button', { name: 'Today', exact: true }).first().click();
   await expect(page.getByRole('heading', { name: 'Today’s Deck' })).toBeVisible();
 });
 

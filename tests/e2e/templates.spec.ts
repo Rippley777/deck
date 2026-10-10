@@ -1,6 +1,7 @@
 import { test, expect } from './fixtures';
 test.beforeEach(async ({ page }) => {
   await page.goto('/');
+  await page.getByRole('button', { name: 'Today', exact: true }).first().click();
   await expect(page.getByRole('heading', { name: 'Today’s Deck' })).toBeVisible();
 });
 test('new stack previews checked items and persists generated dependencies and recent use', async ({
@@ -27,6 +28,7 @@ test('new stack previews checked items and persists generated dependencies and r
   await page.getByRole('button', { name: 'Close task details', exact: true }).click();
   await expect(page.getByText('All changes saved')).toBeVisible();
   await page.reload();
+  await page.getByRole('button', { name: 'Today', exact: true }).first().click();
   await page.keyboard.press('Control+Shift+n');
   await expect(page.getByRole('heading', { name: 'New from template', exact: true })).toBeVisible();
   await expect(page.locator('.template-card').first()).toContainText('Software Project');
@@ -112,6 +114,7 @@ test('library builder, duplicate, reorder, export, import, and delete survive re
   await page.getByRole('button', { name: 'Close', exact: true }).click();
   await expect(page.getByText('All changes saved')).toBeVisible();
   await page.reload();
+  await page.getByRole('button', { name: 'Today', exact: true }).first().click();
   await page.getByRole('button', { name: 'Templates', exact: true }).click();
   await expect(
     page.getByRole('button', { name: 'Unfavorite Quiet routine', exact: true }),

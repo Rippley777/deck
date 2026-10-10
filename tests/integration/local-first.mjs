@@ -185,6 +185,39 @@ try {
   }
   const a = await account('a@example.test'),
     b = await account('b@example.test');
+  // Command Center uses the same real session/account boundary, never a caller-supplied ID.
+  await request('/api/v1/command-center', undefined, '', 401);
+  await db.query('INSERT INTO deck_github(user_id,version,data) VALUES($1,1,$2)', [
+    a.user.id,
+    JSON.stringify({
+      credentials: 'encrypted-fixture-secret',
+      login: 'fixture-github',
+      repositories: [],
+    }),
+  ]);
+  const commandA = await (await request('/api/v1/command-center', undefined, a.cookies)).json();
+  assert.equal(commandA.login, 'fixture-github');
+  assert.equal(commandA.credentials, undefined);
+  assert.equal(JSON.stringify(commandA).includes('encrypted-fixture-secret'), false);
+  const commandB = await (await request('/api/v1/command-center', undefined, b.cookies)).json();
+  assert.equal(commandB.connected, false);
+  await request('/api/v1/command-center/github/disconnect', {}, b.cookies, 409, {
+    'X-Deck-Account': a.user.id,
+  });
+  await request('/api/v1/command-center/github/disconnect', {}, a.cookies, 403, {
+    Origin: 'https://untrusted.example',
+  });
+  await request(
+    '/api/v1/command-center/github/import',
+    { repositoryIds: ['invalid'] },
+    a.cookies,
+    400,
+  );
+  await request('/api/v1/command-center/github/disconnect', {}, a.cookies);
+  assert.equal(
+    (await (await request('/api/v1/command-center', undefined, a.cookies)).json()).connected,
+    false,
+  );
   const empty = await (await request('/api/v1/sync', undefined, a.cookies)).json();
   assert.equal(empty.version, 0);
   assert.equal(empty.data.tasks.length, 0);

@@ -2,6 +2,7 @@ import { test, expect } from './fixtures';
 
 test.beforeEach(async ({ page }) => {
   await page.goto('/');
+  await page.getByRole('button', { name: 'Today', exact: true }).first().click();
   await expect(page.getByRole('heading', { name: 'Today’s Deck' })).toBeVisible();
 });
 
@@ -46,6 +47,7 @@ test('create and edit stack appearance, keep the selected preview, and persist v
   await page.getByRole('button', { name: 'Done', exact: true }).click();
   await expect(page.getByText('All changes saved')).toBeVisible();
   await page.reload();
+  await page.getByRole('button', { name: 'Today', exact: true }).first().click();
   await expect(stack.locator('svg.lucide-bike')).toBeVisible();
   await expect(stack.locator('svg.lucide-bike')).toHaveCSS('color', 'rgb(18, 58, 188)');
   await stack.click();

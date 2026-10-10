@@ -65,7 +65,7 @@ export const useDeck = create<Store>((set, get) => ({
   ready: false,
   error: null,
   saving: false,
-  view: 'today',
+  view: 'command',
   selected: null,
   selection: [],
   modal: null,
@@ -383,6 +383,8 @@ export const useDeck = create<Store>((set, get) => ({
     }));
     const stack: Stack = {
       ...source,
+      // A copy is a new project, not a second owner of the same external identity.
+      command: undefined,
       id,
       name,
       headings: [...source.headings],

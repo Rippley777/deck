@@ -2,6 +2,7 @@ import { test, expect } from './fixtures';
 
 test.beforeEach(async ({ page }) => {
   await page.goto('/');
+  await page.getByRole('button', { name: 'Today', exact: true }).first().click();
   await expect(page.getByRole('heading', { name: 'Today’s Deck' })).toBeVisible();
   await page.keyboard.press('Control+Shift+n');
 });
@@ -48,6 +49,7 @@ test('customize from a preview, preserve setup, persist changes, and keep create
   ).toBeVisible();
   await expect(page.getByText('All changes saved')).toBeVisible();
   await page.reload();
+  await page.getByRole('button', { name: 'Today', exact: true }).first().click();
   await page.getByRole('button', { name: 'Templates', exact: true }).click();
   await page.getByRole('button', { name: 'Customize My software starter', exact: true }).click();
   await expect(page.getByLabel('Description', { exact: true })).toHaveValue(
@@ -114,6 +116,7 @@ test('save a customized copy, leave the original intact, and discard canceled ed
   await page.getByRole('button', { name: 'Close', exact: true }).click();
   await expect(page.getByText('All changes saved')).toBeVisible();
   await page.reload();
+  await page.getByRole('button', { name: 'Today', exact: true }).first().click();
   await page.getByRole('button', { name: 'Templates', exact: true }).click();
   await expect(
     page.getByRole('button', { name: 'Customize Software Project', exact: true }),

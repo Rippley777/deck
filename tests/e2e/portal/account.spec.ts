@@ -95,6 +95,7 @@ test('the portal starts locally with no account prompt and sign-in has a Not now
 }) => {
   await mockCloud(page);
   await page.goto('/app');
+  await page.getByRole('button', { name: 'Today', exact: true }).first().click();
   await expect(page.getByRole('heading', { name: 'Nothing on deck.' })).toBeVisible();
   await expect(page.getByRole('dialog')).toHaveCount(0);
   await page.getByRole('button', { name: 'Account and sync settings' }).click();
@@ -109,6 +110,7 @@ test('email sign-in asks before uploading local content and sign-out keeps it by
 }) => {
   const cloud = await mockCloud(page);
   await page.goto('/app');
+  await page.getByRole('button', { name: 'Today', exact: true }).first().click();
   await localTask(page, 'My private task');
   await signin(page);
   await expect(page.getByRole('heading', { name: 'Back up this Deck?' })).toBeVisible();
@@ -127,6 +129,7 @@ test('email sign-in asks before uploading local content and sign-out keeps it by
     page.getByRole('button', { name: 'Open My private task', exact: true }),
   ).toBeVisible();
   await page.reload();
+  await page.getByRole('button', { name: 'Today', exact: true }).first().click();
   await expect(
     page.getByRole('button', { name: 'Open My private task', exact: true }),
   ).toBeVisible();
@@ -140,6 +143,7 @@ test('a new device offers cloud restoration without replacing data before confir
   };
   const cloud = await mockCloud(page, initial);
   await page.goto('/app');
+  await page.getByRole('button', { name: 'Today', exact: true }).first().click();
   await signin(page);
   await expect(page.getByRole('heading', { name: 'Restore your Deck' })).toBeVisible();
   expect(cloud.uploads).toHaveLength(0);
@@ -153,6 +157,7 @@ test('different accounts require separate local profiles and never upload the pr
 }) => {
   const cloud = await mockCloud(page);
   await page.goto('/app');
+  await page.getByRole('button', { name: 'Today', exact: true }).first().click();
   await localTask(page, 'Only account A');
   await signin(page);
   await page.getByRole('button', { name: 'Sync This Deck' }).click();

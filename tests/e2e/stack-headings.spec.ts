@@ -2,6 +2,7 @@ import { test, expect } from './fixtures';
 
 test.beforeEach(async ({ page }) => {
   await page.goto('/');
+  await page.getByRole('button', { name: 'Today', exact: true }).first().click();
   await expect(page.getByRole('heading', { name: 'Today’s Deck' })).toBeVisible();
   await page.getByRole('button', { name: 'Oddware stack', exact: true }).click();
 });
@@ -33,6 +34,7 @@ test('delete a stack heading keeps its cards, supports undo, and persists', asyn
   await page.getByRole('menuitem', { name: 'Delete heading', exact: true }).click();
   await expect(page.getByText('All changes saved')).toBeVisible();
   await page.reload();
+  await page.getByRole('button', { name: 'Today', exact: true }).first().click();
   await expect(page.getByRole('heading', { name: 'Today’s Deck' })).toBeVisible();
   await page.getByRole('button', { name: 'Oddware stack', exact: true }).click();
   await expect(development).not.toBeVisible();

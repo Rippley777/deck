@@ -42,9 +42,15 @@ Your existing data is not included in the installer. To transfer it, export JSON
 
 ## First launch and accounts
 
-A new Deck opens to an empty Today view: no tasks, Stacks, tags, headings, or templates. Capture a task immediately; accounts are optional. Tasks, templates, Graph View, Project Discovery, settings, exports, and rotating backups work locally.
+A new Deck opens to an empty Command Center: no tasks, Stacks, tags, headings, or templates. Capture a task immediately; accounts are optional. Tasks, templates, Graph View, Project Discovery, settings, exports, and rotating backups work locally.
 
 The sidebar’s **Local only** footer opens **Settings → Account**. Sign in when you want cloud backup and access from other devices. Deck asks before uploading an existing local Deck, offers to restore an existing cloud Deck, and presents merge or explicit replacement choices when both contain data. Signing out defaults to keeping the local Deck. Different accounts use separate local profiles; retained content cannot be silently uploaded to another account.
+
+## Command Center
+
+Deck opens with ranked project attention, traceable health reasons, outstanding-work drill-downs, and recent GitHub activity. Import selected repositories through a read-only GitHub App, link them to existing Stacks, and keep external issues separate from Deck tasks. Project lifecycle, importance and scoring preferences persist with your workspace. Today and every existing task view remain available.
+
+[Command Center setup and limits](docs/command-center.md) covers GitHub authorization, synchronization, security, migrations and Pit Boss references. Pit Boss execution requires a supported external contract that the inspected Pit Boss version does not expose; Deck does not execute its commands. See the [pre-implementation audit](docs/command-center-audit.md).
 
 ## Everyday use
 

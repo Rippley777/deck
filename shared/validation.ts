@@ -1,3 +1,4 @@
+import { projectCommandSchema, commandPreferencesSchema } from './command-center';
 import { z } from 'zod';
 const id = z.string().min(1).max(200);
 const text = z.string().max(1000000);
@@ -40,6 +41,7 @@ export const deckSchema = z
         z.object({
           id,
           name: text,
+          command: projectCommandSchema.optional(),
           icon: text,
           color: text,
           notes: text,
@@ -52,6 +54,7 @@ export const deckSchema = z
     goals: z.array(z.object({ id, title: text, stackIds: strings })).max(10000),
     headings: strings,
     settings: z.object({
+      command: commandPreferencesSchema.optional(),
       theme: z.enum(['dark', 'light', 'system']),
       startOfWeek: z.union([z.literal(0), z.literal(1)]),
       defaultDestination: z.enum(['inbox', 'anytime', 'someday']),

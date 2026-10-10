@@ -1,3 +1,4 @@
+import { projectCommandSchema } from '../../shared/command-center';
 import Papa from 'papaparse';
 import { invoke, isTauri } from '@tauri-apps/api/core';
 import type { DeckData, Task, Stack, Goal } from '../types';
@@ -16,6 +17,7 @@ export async function download(name: string, content: string, type = 'text/plain
   return true;
 }
 const csvFields = [
+  'command',
   'recordType',
   'id',
   'title',
@@ -52,6 +54,7 @@ export function serializeExport(data: DeckData, format: 'json' | 'csv' | 'md'): 
     const rows: Record<string, string | number | null | undefined>[] = [
       ...data.stacks.map((s) => ({
         ...s,
+        command: s.command ? JSON.stringify(s.command) : '',
         recordType: 'stack',
         headings: JSON.stringify(s.headings),
         links: JSON.stringify(s.links),
@@ -114,6 +117,7 @@ function normalizeStack(raw: unknown): Stack {
   if (typeof s.id !== 'string' || !s.id.trim() || typeof s.name !== 'string' || !s.name.trim())
     throw new Error('Every stack needs an ID and name.');
   return {
+    ...(s.command ? { command: projectCommandSchema.parse(s.command) } : {}),
     id: s.id,
     name: s.name,
     icon: typeof s.icon === 'string' ? s.icon : '◈',
@@ -226,6 +230,7 @@ export function importData(content: string, format: 'json' | 'csv', current: Dec
           stacks.push(
             normalizeStack({
               ...row,
+              command: row.command ? JSON.parse(row.command) : undefined,
               headings: arrayField(row, 'headings', index),
               links: arrayField(row, 'links', index),
             }),

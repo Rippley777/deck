@@ -30,6 +30,11 @@ async fn request(
         "export",
         "devices",
         "devices/register",
+        "command-center",
+        "command-center/github/repositories",
+        "command-center/github/import",
+        "command-center/github/refresh",
+        "command-center/github/disconnect",
     ]
     .contains(&path)
     {
@@ -210,4 +215,70 @@ pub async fn poll_cloud_signin(
         .to_string();
     let user = connect_cloud(origin, token).await?;
     Ok(serde_json::json!({"user":user}))
+}
+
+/// Opens a GitHub evidence URL, never credentials or an arbitrary scheme.
+#[tauri::command]
+pub fn open_github_resource(url: String) -> Result<(), String> {
+    let parsed = reqwest::Url::parse(&url).map_err(|_| "Invalid GitHub URL")?;
+    if parsed.scheme() != "https"
+        || parsed.host_str() != Some("github.com")
+        || !parsed.username().is_empty()
+        || parsed.password().is_some()
+    {
+        return Err("Only GitHub HTTPS resource links can be opened".into());
+    }
+    #[cfg(target_os = "macos")]
+    let status = std::process::Command::new("/usr/bin/open")
+        .arg(&url)
+        .status();
+    #[cfg(target_os = "windows")]
+    let status = std::process::Command::new("rundll32.exe")
+        .args(["url.dll,FileProtocolHandler", &url])
+        .status();
+    #[cfg(not(any(target_os = "macos", target_os = "windows")))]
+    let status = std::process::Command::new("xdg-open").arg(&url).status();
+    if status.map_err(|_| "Could not open the browser")?.success() {
+        Ok(())
+    } else {
+        Err("Could not open the browser".into())
+    }
+}
+
+/// Launch only the registered application; never invoke a project command.
+#[tauri::command]
+pub fn open_pit_boss() -> Result<(), String> {
+    #[cfg(target_os = "macos")]
+    {
+        let status = std::process::Command::new("/usr/bin/open")
+            .args(["-b", "dev.oddware.pitboss"])
+            .status()
+            .map_err(|_| "Could not open Pit Boss")?;
+        if status.success() {
+            Ok(())
+        } else {
+            Err("Pit Boss is not installed or could not be opened".into())
+        }
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        Err("Open Pit Boss from your application launcher on this platform".into())
+    }
+}
+
+#[cfg(test)]
+mod command_center_tests {
+    use super::open_github_resource;
+    #[test]
+    fn rejects_untrusted_external_links_before_opening_any_application() {
+        for value in [
+            "javascript:alert(1)",
+            "https://github.com.evil.test/",
+            "https://secret@github.com/",
+            "file:///tmp/script",
+            "http://github.com/",
+        ] {
+            assert!(open_github_resource(value.into()).is_err());
+        }
+    }
 }

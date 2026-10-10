@@ -1,3 +1,4 @@
+import { CommandCenter } from './features/command-center/CommandCenter';
 import { portalEnabled, useCloud } from './lib/cloud';
 import { CalendarDays, Inbox, Layers3, Sun } from 'lucide-react';
 import { trackView } from './lib/analytics';
@@ -231,7 +232,9 @@ export default function App() {
             />
           </div>
         )}
-        {view === 'graph' ? (
+        {view === 'command' ? (
+          <CommandCenter />
+        ) : view === 'graph' ? (
           <Suspense
             fallback={
               <div className="graph-loading">

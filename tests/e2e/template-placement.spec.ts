@@ -3,6 +3,7 @@ import { test, expect } from './fixtures';
 for (const entry of ['stack menu', 'section quick add', 'global picker'] as const) {
   test(`task template added from ${entry} gets a top-level stack heading`, async ({ page }) => {
     await page.goto('/');
+    await page.getByRole('button', { name: 'Today', exact: true }).first().click();
     await expect(page.getByRole('heading', { name: 'Today’s Deck' })).toBeVisible();
     if (entry === 'global picker') {
       await page.keyboard.press('Control+Shift+n');
@@ -41,6 +42,7 @@ for (const entry of ['stack menu', 'section quick add', 'global picker'] as cons
     ).toHaveCount(0);
     await expect(page.getByText('All changes saved')).toBeVisible();
     await page.reload();
+    await page.getByRole('button', { name: 'Today', exact: true }).first().click();
     await expect(page.getByRole('heading', { name: 'Today’s Deck' })).toBeVisible();
     await page.getByRole('button', { name: 'Oddware stack', exact: true }).click();
     await expect(section.locator('.task-row')).toHaveCount(10);
@@ -51,6 +53,7 @@ test('stack template can be added to an existing stack from the global picker', 
   page,
 }) => {
   await page.goto('/');
+  await page.getByRole('button', { name: 'Today', exact: true }).first().click();
   await expect(page.getByRole('heading', { name: 'Today’s Deck' })).toBeVisible();
   await page.keyboard.press('Control+Shift+n');
   await page.getByLabel('Search templates').fill('Software Project');

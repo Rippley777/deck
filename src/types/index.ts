@@ -1,6 +1,16 @@
+import type { z } from 'zod';
+import type { projectCommandSchema, commandPreferencesSchema } from '../../shared/command-center';
 export type Destination = 'inbox' | 'anytime' | 'someday';
 export type View =
-  'today' | 'inbox' | 'upcoming' | 'anytime' | 'someday' | 'logbook' | 'graph' | `stack:${string}`;
+  | 'command'
+  | 'today'
+  | 'inbox'
+  | 'upcoming'
+  | 'anytime'
+  | 'someday'
+  | 'logbook'
+  | 'graph'
+  | `stack:${string}`;
 export interface ChecklistItem {
   id: string;
   title: string;
@@ -31,6 +41,7 @@ export interface Task {
   order: number;
 }
 export interface Stack {
+  command?: z.infer<typeof projectCommandSchema>;
   id: string;
   name: string;
   icon: string;
@@ -46,6 +57,7 @@ export interface Goal {
   stackIds: string[];
 }
 export interface Settings {
+  command?: z.infer<typeof commandPreferencesSchema>;
   theme: 'dark' | 'light' | 'system';
   startOfWeek: 0 | 1;
   defaultDestination: Destination;

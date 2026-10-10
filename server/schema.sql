@@ -44,3 +44,10 @@ CREATE TABLE IF NOT EXISTS deck_pairings (
   user_id text REFERENCES "user"(id) ON DELETE CASCADE,
   expires_at timestamptz NOT NULL
 );
+
+-- Command Center cache and AES-GCM encrypted credentials, owned by the Deck account.
+CREATE TABLE IF NOT EXISTS deck_github (
+  user_id text PRIMARY KEY REFERENCES "user"(id) ON DELETE CASCADE,
+  version integer NOT NULL,
+  data text NOT NULL
+);

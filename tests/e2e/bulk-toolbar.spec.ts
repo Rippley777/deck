@@ -3,6 +3,7 @@ import { test, expect } from './fixtures';
 for (const width of [1440, 390]) {
   test(`bulk delete stays accessible while scrolling at ${width}px`, async ({ page }) => {
     await page.goto('/');
+    await page.getByRole('button', { name: 'Today', exact: true }).first().click();
     await expect(page.getByRole('heading', { name: 'Today’s Deck' })).toBeVisible();
     await page.getByRole('button', { name: 'Settings', exact: true }).click();
     await page.getByRole('button', { name: 'Data', exact: true }).click();

@@ -3,6 +3,7 @@ test('a recurring completion creates exactly one next occurrence and undo remove
   page,
 }) => {
   await page.goto('/');
+  await page.getByRole('button', { name: 'Today', exact: true }).first().click();
   await page.getByRole('button', { name: 'Open Water the plants', exact: true }).waitFor();
   await page.getByRole('button', { name: 'Complete Water the plants', exact: true }).click();
   await page.getByRole('button', { name: 'On Deck', exact: true }).click();
@@ -16,6 +17,7 @@ test('a recurring completion creates exactly one next occurrence and undo remove
 });
 test('restore a SQLite backup and preserve a before-restore snapshot', async ({ page }) => {
   await page.goto('/');
+  await page.getByRole('button', { name: 'Today', exact: true }).first().click();
   await page.getByRole('heading', { name: 'Today’s Deck' }).waitFor();
   await page.getByRole('button', { name: 'Settings', exact: true }).click();
   await page.getByRole('button', { name: 'Backups', exact: true }).click();
@@ -58,6 +60,7 @@ test('link suggestions and dependency validation are reflected in a local graph'
   page,
 }) => {
   await page.goto('/');
+  await page.getByRole('button', { name: 'Today', exact: true }).first().click();
   await page.getByRole('button', { name: 'Open Deploy Repo Reaper', exact: true }).click();
   await page
     .getByRole('textbox', { name: 'Task notes', exact: true })

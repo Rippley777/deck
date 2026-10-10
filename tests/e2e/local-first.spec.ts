@@ -4,6 +4,7 @@ test('a new Deck opens empty, works without an account, and persists on reload',
   page,
 }) => {
   await page.goto('/');
+  await page.getByRole('button', { name: 'Today', exact: true }).first().click();
   await expect(page.getByRole('heading', { name: 'Today’s Deck' })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Nothing on deck.' })).toBeVisible();
   await page.screenshot({ path: 'test-results/local-first-desktop.png', animations: 'disabled' });
@@ -26,6 +27,7 @@ test('a new Deck opens empty, works without an account, and persists on reload',
   await expect(page.getByRole('button', { name: 'Open My first task', exact: true })).toBeVisible();
   await expect(page.getByText('All changes saved', { exact: true })).toBeVisible();
   await page.reload();
+  await page.getByRole('button', { name: 'Today', exact: true }).first().click();
   await expect(page.getByRole('button', { name: 'Open My first task', exact: true })).toBeVisible();
   await page.getByRole('button', { name: 'Complete My first task', exact: true }).click();
   await page.getByRole('button', { name: 'Logbook', exact: true }).click();
@@ -38,6 +40,7 @@ test('a new Deck opens empty, works without an account, and persists on reload',
 
 test('separate local profiles preserve their own tasks and backups', async ({ page }) => {
   await page.goto('/');
+  await page.getByRole('button', { name: 'Today', exact: true }).first().click();
   await page.getByRole('heading', { name: 'Today’s Deck' }).waitFor();
   await page.keyboard.press('Control+n');
   await page.getByRole('textbox', { name: 'New task' }).fill('Default profile task today');

@@ -242,13 +242,15 @@ Document major decisions below.
 
 ### ADR-007: Shuffle Owns Subscription Strategy and Evidence
 
-**Decision:** Shuffle is an independently deployable, mobile-first subscription planning application. React and Capacitor clients share the same versioned API, household data, deterministic optimizer, and AI adapters. Its initial server uses a private relational SQLite database on persistent local disk; it does not share another application's tables or runtime.
+**Decision:** Shuffle is an independently deployable, mobile-first subscription planning application. React and Capacitor clients share the same versioned API, household data, deterministic optimizer, and AI adapters. Local development uses private SQLite on local disk; the invite-only hosted alpha uses its own Azure SQL free-offer database through the same asynchronous repository layer. It does not share another application's tables or runtime.
 
 **Boundary:** AI produces reviewable proposals. An owner approves a specific billing action; the deterministic server validates current state and permissions. Provider authentication happens directly with the provider. Guided activation, pause, plan changes, and cancellation require separately recorded evidence, with user reports distinguished from independent verification. Savings have a frozen baseline and provenance; projections never become realized savings solely because a recommendation was accepted.
 
 **Integrations:** Plaid, TMDB/JustWatch, OpenRouter, and Anthropic are optional adapters. No provider credentials are required for manual subscription management. Black Box routing, House Edge telemetry, shared identity, and a live Shipwreck link are planned extension points, not active integrations. Existing ecosystem applications and contracts are unchanged. Shuffle requires its own deployment, secrets, and native release configuration.
 
-**Preview deployment:** A dedicated Azure App Service F1 Free plan hosts the web app and API at `https://shuffle-preview-daac2bd8.azurewebsites.net`. Explicit sample-only mode uses isolated seeded households and in-memory SQLite, resetting on host restart. Real accounts and external credentials are disabled. No paid resources or active cross-application contracts are introduced; persistent production storage remains a separate release requirement.
+**Preview deployment:** A dedicated Azure App Service F1 Free plan hosts the web app and API at `https://shuffle-preview-daac2bd8.azurewebsites.net`. Explicit sample-only mode uses isolated seeded households and in-memory SQLite, resetting on host restart. Real accounts and external credentials are disabled. No paid resources or active cross-application contracts are introduced; the sample preview remains separate from persistent alpha storage.
+
+**Private alpha deployment:** A separate F1 Free app at `https://shuffle-alpha-daac2bd8.azurewebsites.net` uses the Shuffle-owned Azure SQL free offer with `useFreeLimit=true` and `AutoPause` on exhaustion. Email-bound admission, consent, operator-assisted recovery/closure, feedback, and encrypted logical backup/restore are available. Hosted reminders reconcile on app load to permit database sleep. Neither free service promises production availability; device checks, support operations, and any public/native release remain operator work. Paid AI, banking, catalog, analytics, messaging, and ecosystem identity integrations are disabled. Existing application contracts and ownership remain unchanged.
 
 ## Open Architecture Questions
 
@@ -262,3 +264,21 @@ Use this section for questions that are not yet settled.
 - Which House Edge events are required versus optional?
 - Which integrations need offline queues and retries?
 - Which applications receive `oddware.dev` subdomains?
+
+### ADR-007: Questbook Privacy Defaults and Identity Boundaries
+
+**Decision:** This supersedes the privacy-sensitive behavior in ADR-004 through ADR-006. Questbook remains local-first and separates provider authentication mappings from randomly identified learning accounts. Teacher access uses expiring, single-use classroom join codes and class-scoped membership projections. A self-declared teacher or accepted guardian relationship does not grant verified consent authority.
+
+**Restrictions:** Under-13 and unknown-age cloud accounts remain blocked until verified consent is implemented. Hosted AI requires an adult account plus Pro and minimizes structured educational input. Browser BYOK and custom extraction endpoints are disabled; scanned image processing stays local with metadata stripping, explicit crop/review and default photo deletion. Retained worksheet images expire after 30 days. Account erasure removes learning and identity records, with a separate 90-day content-free AI accounting retention period.
+
+**Integration impact:** Automatic House Edge browser analytics is disabled on Questbook learning surfaces. No House Edge ingestion schema or Black Box event contract changes; Questbook still owns its domain data. Deploy cloud v2 only after legacy community record retirement, separate private identity-table provisioning and retention-job configuration. Existing browser learning saves remain compatible. These controls do not constitute legal certification.
+
+### ADR-008: Deck Command Center Uses Read-Only GitHub Evidence
+
+**Decision:** Deck enhances its existing local-first Stacks, tasks and graph with a Command Center. A read-only GitHub App supplies account-scoped repository metadata, work references and cached activity. GitHub repository IDs are the canonical external identity. GitHub authorization uses session-bound state/PKCE and encrypted server-side access/refresh tokens. Existing local SQLite and opt-in PostgreSQL/Azure SQL workspace synchronization remain intact.
+
+**Ownership:** Deck owns project links, task relationships, manual risks, preferences and deterministic health calculations. GitHub owns repository and workflow records. External issues remain references rather than automatically generated Deck tasks. Optional integrations cannot prevent local planning.
+
+**Pit Boss boundary:** Deck stores manual project/action references. The inspected Pit Boss version has no external API or registered deep-link execution contract; Deck exposes no command runner. macOS Desktop may open the registered Pit Boss application without invoking an action. Remote execution, action discovery and run status require a future authenticated, versioned Pit Boss contract with project/action authorization, confirmation, correlation IDs and idempotency. No cross-application database access is introduced.
+
+**Deployment:** Apply the additive Deck integration-cache migration and configure the GitHub App before publishing clients. Background synchronization is best-effort while the API host is awake. Existing House Edge telemetry remains optional; no Black Box or Running Tab contracts change.

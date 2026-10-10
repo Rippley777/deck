@@ -428,6 +428,12 @@ Scan a repository, find the ugly parts, and get a prioritized cleanup plan.
 
 ---
 
+## Deck Command Center Boundary
+
+When working on Deck, keep GitHub credentials server-side and repository access read-only. Use immutable GitHub repository IDs, explicit project matching, external work references and traceable deterministic health. Preserve local task management during integration outages. Pit Boss owns command execution; manual references or launching its application do not establish an authenticated execution bridge. Do not invent a deep-link protocol or expose a Deck shell endpoint.
+
+---
+
 ## Cross-Application Changes
 
 For any task affecting more than one application, provide a brief impact summary before implementation:
