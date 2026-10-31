@@ -53,7 +53,7 @@
     "kysely": "^0.29.6",
     "lucide-react": "^0.468.0",
     "mssql": "^12.7.2",
-    "nodemailer": "^10.0.13",
+    "nodemailer": "^10.1.4",
     "papaparse": "^5.5.2",
     "pg": "^8.23.1",
     "react": "^19.0.0",
