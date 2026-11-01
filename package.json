@@ -42,7 +42,7 @@
     "@house-edge/analytics": "file:vendor/house-edge-analytics-0.1.1.tgz",
     "@radix-ui/react-dialog": "^1.1.6",
     "@tauri-apps/api": "^2.3.0",
-    "better-auth": "^1.7.6",
+    "better-auth": "^1.7.15",
     "chrono-node": "^2.8.0",
     "cytoscape": "^3.31.0",
     "cytoscape-fcose": "^2.2.0",
